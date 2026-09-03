@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <base target="_top">
+    <meta charset="utf-8">
+    <link rel="preload" as="image"
+      href="https://drive.google.com/thumbnail?id=1xu3olDb4OIgL2QzIKreygYr-J_oC3cv3&amp;sz=w1000"
+      fetchpriority="high">
+    <script id="dados-iniciais-mapro" type="application/json"><?!= dadosIniciaisJson ?></script>
+    <?!= incluir('Styles'); ?>
+  </head>
+  <body>
+    <main class="pagina">
+      <section class="conteudo" aria-live="polite">
+        <div id="carregando" class="tela tela-estado">
+          <div class="spinner" aria-hidden="true"></div>
+          <p>Carregando seu acesso...</p>
+        </div>
+
+        <div id="inicio" class="tela inicio-layout" hidden>
+          <div class="painel-marca" aria-hidden="true">
+            <img id="logo" class="logo-sgi" alt="">
+          </div>
+          <section class="area-menu" aria-label="Página inicial do MAPRO">
+            <img id="logo-empresa" class="logo-empresa" alt="Logo do Grupo JCA">
+            <h1 class="somente-leitor">Gestão de Projetos</h1>
+            <p id="saudacao" class="somente-leitor"></p>
+            <nav id="menu" class="menu" aria-label="Menu principal"></nav>
+          </section>
+        </div>
+
+        <div id="sem-acesso" class="tela tela-estado" hidden>
+          <div class="cartao-estado">
+            <img id="logo-bloqueio" class="logo-estado" alt="Logo do SGI">
+            <div class="icone">!</div>
+            <h1>Acesso não liberado</h1>
+            <p id="mensagem-bloqueio" class="subtitulo"></p>
+            <p id="email" class="email"></p>
+            <button id="solicitar" class="botao" type="button">Solicitar acesso</button>
+          </div>
+        </div>
+
+        <div id="erro" class="tela tela-estado" hidden>
+          <div class="cartao-estado">
+            <div class="icone erro">!</div>
+            <h1>Não foi possível abrir o sistema</h1>
+            <p id="mensagem-erro" class="subtitulo"></p>
+            <button id="tentar-novamente" class="botao secundario" type="button">
+              Tentar novamente
+            </button>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <?!= incluir('Carregamento'); ?>
+    <div id="aviso" class="aviso" role="status" hidden></div>
+    <?!= incluir('ComponentesJS'); ?>
+    <?!= incluir('JavaScript'); ?>
+  </body>
+</html>

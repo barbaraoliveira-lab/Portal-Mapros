@@ -1,0 +1,53 @@
+<script>
+  window.MaproUI = Object.freeze({
+    readInitialData: function () {
+      const element = document.getElementById('dados-iniciais-mapro');
+      if (!element) return null;
+      try {
+        return JSON.parse(element.textContent || '{}');
+      } catch (error) {
+        return null;
+      }
+    },
+    showLoading: function (message) {
+      const overlay = document.getElementById('modal-carregamento-global');
+      const text = document.getElementById('texto-carregamento-global');
+      if (text && message) text.textContent = String(message).toLocaleUpperCase('pt-BR');
+      if (overlay) overlay.hidden = false;
+    },
+    hideLoading: function () {
+      const overlay = document.getElementById('modal-carregamento-global');
+      if (overlay) overlay.hidden = true;
+    },
+    navigate: function (url, message) {
+      if (!url) return;
+      this.showLoading(message || 'Carregando página...');
+      window.requestAnimationFrame(function () {
+        window.requestAnimationFrame(function () {
+          window.open(String(url), '_top');
+        });
+      });
+    },
+    renderConfirmationMessage: function (element, segments) {
+      const content = document.createElement('span');
+      content.className = 'mensagem-confirmacao-conteudo';
+      const fragment = document.createDocumentFragment();
+      segments.forEach(function (segment) {
+        if (typeof segment === 'string') {
+          fragment.appendChild(document.createTextNode(segment));
+          return;
+        }
+        const emphasis = document.createElement('strong');
+        emphasis.className = 'destaque-texto-confirmacao';
+        emphasis.textContent = String(segment.emphasis || '');
+        fragment.appendChild(emphasis);
+      });
+      content.appendChild(fragment);
+      element.replaceChildren(content);
+    }
+  });
+
+  window.addEventListener('beforeunload', function () {
+    window.MaproUI.showLoading('Carregando página...');
+  });
+</script>

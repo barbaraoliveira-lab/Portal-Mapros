@@ -1,0 +1,135 @@
+<script>
+  const idsTelas = ['carregando', 'inicio', 'sem-acesso', 'erro'];
+  let tempoAviso;
+  let dadosSistema = null;
+  let dadosIniciaisConsumidos = false;
+
+  function mostrarTela(id) {
+    idsTelas.forEach(function (item) {
+      document.getElementById(item).hidden = item !== id;
+    });
+  }
+
+  function mostrarAviso(mensagem, falha) {
+    const aviso = document.getElementById('aviso');
+    clearTimeout(tempoAviso);
+    aviso.textContent = mensagem;
+    aviso.classList.toggle('falha', Boolean(falha));
+    aviso.hidden = false;
+    tempoAviso = setTimeout(function () { aviso.hidden = true; }, 5000);
+  }
+
+  function mostrarErro(mensagem) {
+    document.getElementById('mensagem-erro').textContent = mensagem;
+    mostrarTela('erro');
+  }
+
+  function montarInicio(dados) {
+    dadosSistema = dados;
+    document.documentElement.style.setProperty('--primaria', dados.corPrincipal);
+    document.getElementById('logo').src = dados.logoUrl;
+    document.getElementById('logo-empresa').src = dados.logoEmpresaUrl;
+    document.getElementById('saudacao').textContent = 'Olá, ' + dados.nome;
+
+    const menu = document.getElementById('menu');
+    menu.replaceChildren();
+    dados.botoes.forEach(function (item) {
+      const botao = document.createElement('button');
+      botao.type = 'button';
+      botao.className = 'botao';
+      botao.textContent = item.texto;
+      botao.addEventListener('click', function () {
+        if (item.id === 'usuarios') {
+          MaproUI.navigate(
+            dadosSistema.urlAplicacao + '?pagina=cadastrosDeUsuarios',
+            'Abrindo cadastro de usuários...'
+          );
+          return;
+        }
+        if (item.id === 'solicitacoes') {
+          MaproUI.navigate(
+            dadosSistema.urlAplicacao + '?pagina=solicitacoesDeMapro',
+            'Abrindo solicitações de Mapro...'
+          );
+          return;
+        }
+        if (item.id === 'mapros' || item.id === 'minhas-mapros') {
+          MaproUI.navigate(
+            dadosSistema.urlAplicacao + '?pagina=' +
+              (item.id === 'mapros' ? 'mapros' : 'minhasMapros'),
+            'Abrindo projetos...'
+          );
+          return;
+        }
+        if (item.id === 'dashboard') {
+          MaproUI.navigate(
+            dadosSistema.urlAplicacao + '?pagina=dashboard',
+            'Abrindo dashboard...'
+          );
+          return;
+        }
+        mostrarAviso('A página “' + item.texto + '” será criada na próxima etapa.');
+      });
+      menu.appendChild(botao);
+    });
+    mostrarTela('inicio');
+  }
+
+  function montarBloqueio(dados) {
+    document.documentElement.style.setProperty('--primaria', dados.corPrincipal);
+    document.getElementById('logo-bloqueio').src = dados.logoUrl;
+    document.getElementById('mensagem-bloqueio').textContent = dados.mensagem;
+    document.getElementById('email').textContent = dados.email;
+    mostrarTela('sem-acesso');
+  }
+
+  function carregar() {
+    mostrarTela('carregando');
+    MaproUI.showLoading('Carregando seu acesso...');
+    const inicial = !dadosIniciaisConsumidos ? MaproUI.readInitialData() : null;
+    if (inicial && inicial.pagina === 'Index' && inicial.sistema) {
+      dadosIniciaisConsumidos = true;
+      processarSistema(inicial.sistema);
+      return;
+    }
+    google.script.run
+      .withSuccessHandler(processarSistema)
+      .withFailureHandler(function () {
+        MaproUI.hideLoading();
+        mostrarErro('Falha de comunicação com o servidor.');
+      })
+      .carregarSistema();
+  }
+
+  function processarSistema(resposta) {
+    MaproUI.hideLoading();
+    if (!resposta.sucesso) return mostrarErro(resposta.mensagem);
+    if (resposta.dados.acesso) montarInicio(resposta.dados);
+    else montarBloqueio(resposta.dados);
+  }
+
+  function enviarSolicitacao() {
+    const botao = document.getElementById('solicitar');
+    botao.disabled = true;
+    botao.textContent = 'Enviando...';
+    MaproUI.showLoading('Enviando solicitação...');
+    google.script.run
+      .withSuccessHandler(function (resposta) {
+        MaproUI.hideLoading();
+        mostrarAviso(resposta.mensagem, !resposta.sucesso);
+        botao.textContent = resposta.sucesso ? 'Solicitação enviada' : 'Solicitar acesso';
+        botao.disabled = resposta.sucesso;
+      })
+      .withFailureHandler(function () {
+        MaproUI.hideLoading();
+        mostrarAviso('Falha ao enviar a solicitação.', true);
+        botao.disabled = false;
+        botao.textContent = 'Solicitar acesso';
+      })
+      .solicitarAcesso();
+  }
+
+  document.getElementById('solicitar').addEventListener('click', enviarSolicitacao);
+  document.getElementById('tentar-novamente').addEventListener('click', carregar);
+  carregar();
+</script>

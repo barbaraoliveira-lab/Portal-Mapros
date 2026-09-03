@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <base target="_top">
+    <meta charset="utf-8">
+    <link rel="preload" as="image"
+      href="https://drive.google.com/thumbnail?id=1xu3olDb4OIgL2QzIKreygYr-J_oC3cv3&amp;sz=w4000"
+      fetchpriority="high">
+    <link rel="preload" as="image"
+      href="https://drive.google.com/thumbnail?id=1xu3olDb4OIgL2QzIKreygYr-J_oC3cv3&amp;sz=w1000"
+      fetchpriority="high">
+    <script id="dados-iniciais-mapro" type="application/json"><?!= dadosIniciaisJson ?></script>
+    <?!= incluir('Styles'); ?>
+  </head>
+  <body>
+    <main class="pagina-cadastro">
+      <header class="cabecalho-cadastro">
+        <div class="titulo-cadastro">
+          <img id="logo-cadastro" class="logo-cadastro" alt="Logo do SGI"
+            src="https://drive.google.com/thumbnail?id=1xu3olDb4OIgL2QzIKreygYr-J_oC3cv3&amp;sz=w4000"
+            width="42" height="42" loading="eager" fetchpriority="high">
+          <h1>CADASTRO DE USUÁRIO</h1>
+        </div>
+        <button id="voltar-inicio" class="botao-icone botao-cabecalho" type="button"
+          aria-label="Voltar para a página inicial" title="Voltar para a página inicial">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M3 11.5 12 4l9 7.5M5.5 10v10h13V10M9.5 20v-6h5v6"/>
+          </svg>
+        </button>
+      </header>
+
+      <div class="barra-ferramentas" aria-label="Ações de usuários">
+        <div class="grupo-ferramentas">
+          <button id="novo-usuario" class="botao-icone" type="button"
+            aria-label="Adicionar usuário" title="Adicionar usuário">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v10M7 12h10"/></svg>
+          </button>
+          <button id="editar-usuario" class="botao-icone" type="button"
+            aria-label="Editar usuário selecionado" title="Editar usuário selecionado">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4ZM13.5 6.5l4 4M12 4H5a1 1 0 0 0-1 1v7"/></svg>
+          </button>
+          <button id="excluir-usuario" class="botao-icone" type="button"
+            aria-label="Excluir usuário selecionado" title="Excluir usuário selecionado">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 14h10l1-14M10 11v6M14 11v6"/></svg>
+          </button>
+        </div>
+
+        <div class="grupo-ferramentas">
+          <button id="baixar-csv" class="botao-icone" type="button"
+            aria-label="Baixar listagem em CSV" title="Baixar listagem em CSV">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h7l4 4v14H7zM14 3v5h5M9 16h6M12 11v6M9.5 14.5 12 17l2.5-2.5"/></svg>
+          </button>
+          <button id="abrir-filtros" class="botao-icone" type="button"
+            aria-label="Aplicar filtros" title="Aplicar filtros">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h18l-7 8v6l-4 2v-8z"/></svg>
+          </button>
+          <button id="limpar-filtros" class="botao-icone" type="button"
+            aria-label="Apagar filtros" title="Apagar filtros">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 15 8-8 8 8-5 5H9zM15 20h6"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <section class="area-tabela" aria-label="Listagem de usuários">
+        <div id="carregando-usuarios" class="estado-tabela">Validando seu acesso...</div>
+        <div id="tabela-vazia" class="estado-tabela" hidden>Nenhum usuário encontrado.</div>
+        <div id="tabela-container" class="tabela-container" hidden>
+          <table class="tabela-usuarios">
+            <thead>
+              <tr>
+                <th scope="col">ID</th>
+                <th scope="col">NOME</th>
+                <th scope="col">E-MAIL</th>
+                <th scope="col">MATRÍCULA</th>
+                <th scope="col">DEPARTAMENTO</th>
+                <th scope="col">NÍVEL</th>
+                <th scope="col">STATUS</th>
+                <th scope="col">ATUALIZADO EM</th>
+              </tr>
+            </thead>
+            <tbody id="corpo-tabela-usuarios"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <div id="modal-usuario" class="fundo-modal" hidden>
+      <section class="modal modal-grande" role="dialog" aria-modal="true"
+        aria-labelledby="titulo-modal-usuario">
+        <button class="fechar-modal" type="button" data-fechar-modal="modal-usuario"
+          aria-label="Fechar">×</button>
+        <h2 id="titulo-modal-usuario">CADASTRAR USUÁRIO</h2>
+        <form id="formulario-usuario" class="formulario-grid">
+          <label>
+            ID
+            <input id="usuario-id" name="id" type="text" placeholder="Gerado automaticamente" readonly>
+          </label>
+          <label>
+            Matrícula
+            <input id="usuario-matricula" name="matricula" type="text" maxlength="30"
+              placeholder="Digite a matrícula" required>
+          </label>
+          <label>
+            Nome
+            <input id="usuario-nome" name="nome" type="text" maxlength="120"
+              placeholder="Digite o nome completo" required>
+          </label>
+          <label>
+            E-mail
+            <input id="usuario-email" name="email" type="email" maxlength="160"
+              placeholder="nome@empresa.com.br" required>
+          </label>
+          <div class="campo-pesquisavel campo-departamento-usuario">
+            <label for="usuario-departamento">Departamento</label>
+            <input id="usuario-departamento" name="departamento" type="text" autocomplete="off"
+              placeholder="Selecione o departamento" role="combobox" aria-expanded="false"
+              aria-controls="opcoes-usuario-departamento" required>
+            <div id="opcoes-usuario-departamento" class="opcoes-pesquisaveis"
+              role="listbox" hidden></div>
+          </div>
+          <label>
+            Nível de usuário
+            <select id="usuario-nivel" name="nivel" required>
+              <option value="">Selecione o nível</option>
+              <option value="ADMIN">Administrador</option>
+              <option value="PARTICIPANTE">Participante</option>
+            </select>
+          </label>
+          <label>
+            Status
+            <select id="usuario-status" name="status" required>
+              <option value="ATIVO">Ativo</option>
+              <option value="INATIVO">Inativo</option>
+            </select>
+          </label>
+          <div class="acoes-modal formulario-largura-total">
+            <button class="botao-modal botao-cancelar" type="button"
+              data-fechar-modal="modal-usuario">CANCELAR</button>
+            <button id="salvar-usuario" class="botao-modal botao-confirmar" type="submit">
+              CADASTRAR
+            </button>
+          </div>
+        </form>
+      </section>
+    </div>
+
+    <div id="modal-filtros" class="fundo-modal" hidden>
+      <section class="modal modal-grande" role="dialog" aria-modal="true"
+        aria-labelledby="titulo-modal-filtros">
+        <button class="fechar-modal" type="button" data-fechar-modal="modal-filtros"
+          aria-label="Fechar">×</button>
+        <h2 id="titulo-modal-filtros">PESQUISA</h2>
+        <form id="formulario-filtros" class="formulario-grid">
+          <div class="campo-pesquisavel campo-filtro-usuario">
+            <label for="filtro-id">ID</label>
+            <input id="filtro-id" type="text" inputmode="numeric" autocomplete="off"
+              placeholder="Todos" role="combobox" aria-expanded="false"
+              aria-controls="opcoes-filtro-id">
+            <div id="opcoes-filtro-id" class="opcoes-pesquisaveis" role="listbox" hidden></div>
+          </div>
+          <div class="campo-pesquisavel campo-filtro-usuario">
+            <label for="filtro-matricula">Matrícula</label>
+            <input id="filtro-matricula" type="text" autocomplete="off" placeholder="Todas"
+              role="combobox" aria-expanded="false" aria-controls="opcoes-filtro-matricula">
+            <div id="opcoes-filtro-matricula" class="opcoes-pesquisaveis" role="listbox" hidden></div>
+          </div>
+          <div class="campo-pesquisavel campo-filtro-usuario">
+            <label for="filtro-nome">Nome</label>
+            <input id="filtro-nome" type="text" autocomplete="off" placeholder="Todos"
+              role="combobox" aria-expanded="false" aria-controls="opcoes-filtro-nome">
+            <div id="opcoes-filtro-nome" class="opcoes-pesquisaveis" role="listbox" hidden></div>
+          </div>
+          <div class="campo-pesquisavel campo-filtro-usuario">
+            <label for="filtro-email">E-mail</label>
+            <input id="filtro-email" type="email" autocomplete="off" placeholder="Todos"
+              role="combobox" aria-expanded="false" aria-controls="opcoes-filtro-email">
+            <div id="opcoes-filtro-email" class="opcoes-pesquisaveis" role="listbox" hidden></div>
+          </div>
+          <div class="campo-pesquisavel campo-filtro-usuario">
+            <label for="filtro-departamento">Departamento</label>
+            <input id="filtro-departamento" type="text" autocomplete="off" placeholder="Todos"
+              role="combobox" aria-expanded="false"
+              aria-controls="opcoes-filtro-departamento">
+            <div id="opcoes-filtro-departamento" class="opcoes-pesquisaveis"
+              role="listbox" hidden></div>
+          </div>
+          <label>
+            Status
+            <select id="filtro-status">
+              <option value="TODOS">Todos</option>
+              <option value="ATIVO">Ativo</option>
+              <option value="INATIVO">Inativo</option>
+            </select>
+          </label>
+          <div class="acoes-modal formulario-largura-total">
+            <button class="botao-modal botao-cancelar" type="button"
+              data-fechar-modal="modal-filtros">CANCELAR</button>
+            <button class="botao-modal botao-confirmar" type="submit">PESQUISAR</button>
+          </div>
+        </form>
+      </section>
+    </div>
+
+    <div id="modal-exclusao" class="fundo-modal" hidden>
+      <section class="modal modal-confirmacao modal-confirmacao-acao" role="dialog" aria-modal="true"
+        aria-labelledby="titulo-modal-exclusao">
+        <h2 id="titulo-modal-exclusao">EXCLUIR USUÁRIO</h2>
+        <p id="texto-exclusao" class="texto-confirmacao"></p>
+        <div class="acoes-modal">
+          <button class="botao-modal botao-nao" type="button"
+            data-fechar-modal="modal-exclusao">NÃO</button>
+          <button id="confirmar-exclusao" class="botao-modal botao-confirmar" type="button">
+            SIM
+          </button>
+        </div>
+      </section>
+    </div>
+
+    <?!= incluir('Carregamento'); ?>
+    <div id="aviso" class="aviso" role="status" hidden></div>
+    <?!= incluir('ComponentesJS'); ?>
+    <?!= incluir('cadastrosDeUsuariosJS'); ?>
+  </body>
+</html>

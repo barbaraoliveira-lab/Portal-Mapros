@@ -1,0 +1,105 @@
+<style>
+  :root { --dashboard-navy: #06063d; --dashboard-red: #ec0e37; --dashboard-bg: #f5f6fa; }
+  * { box-sizing: border-box; }
+  .pagina-dashboard { min-height: 100vh; color: var(--dashboard-navy); background: var(--dashboard-bg); }
+  .pagina-dashboard > .cabecalho-cadastro { position: sticky; top: 0; z-index: 30; }
+  .titulo-cadastro > div { min-width: 0; }
+  .titulo-cadastro h1 { margin: 0; }
+  #escopo-dashboard { margin: 2px 0 0; color: rgba(255,255,255,.75); font-size: .65rem; font-weight: 700; }
+  .barra-abas-dashboard {
+    position: sticky; top: 58px; z-index: 25; display: flex; gap: 6px; padding: 8px 14px 0;
+    border-bottom: 1px solid #dddfe8; background: #fff;
+  }
+  .aba-dashboard {
+    min-height: 40px; padding: 8px 18px; border: 0; border-bottom: 3px solid transparent;
+    color: #6a6b7b; background: transparent; font: inherit; font-size: .75rem; font-weight: 900;
+    cursor: pointer;
+  }
+  .aba-dashboard.ativa { border-color: var(--dashboard-red); color: var(--dashboard-navy); }
+  .aba-dashboard span { display: inline-grid; min-width: 23px; min-height: 23px; margin-left: 6px; place-items: center; border-radius: 999px; color: #fff; background: var(--dashboard-red); font-size: .65rem; }
+  .filtros-dashboard {
+    display: grid; grid-template-columns: repeat(5, minmax(125px, 1fr)); gap: 9px;
+    padding: 12px 14px; border-bottom: 1px solid #e0e2ea; background: #fff;
+  }
+  .filtros-dashboard label { display: grid; gap: 4px; color: #656679; font-size: .61rem; font-weight: 900; text-transform: uppercase; }
+  .filtros-dashboard input, .filtros-dashboard select {
+    width: 100%; min-height: 36px; padding: 7px 9px; border: 1px solid #d7d9e3; border-radius: 7px;
+    color: var(--dashboard-navy); background: #fafbfc; font: inherit; font-size: .73rem; outline: none;
+  }
+  .filtros-dashboard input:focus, .filtros-dashboard select:focus { border-color: var(--dashboard-navy); box-shadow: 0 0 0 2px rgba(6,6,61,.09); }
+  #limpar-filtros-dashboard { align-self: end; min-height: 36px; border: 0; border-radius: 7px; color: #fff; background: var(--dashboard-navy); font: inherit; font-size: .7rem; font-weight: 900; cursor: pointer; }
+  .layout-dashboard { display: grid; grid-template-columns: 230px minmax(0, 1fr); min-height: calc(100vh - 250px); transition: grid-template-columns 180ms ease; }
+  .layout-dashboard.portfolios-recolhidos { grid-template-columns: 54px minmax(0, 1fr); }
+  .painel-portfolios-dashboard { min-width: 0; padding: 16px 11px; overflow: hidden; border-right: 1px solid #e0e2ea; background: #fff; }
+  .cabecalho-portfolios-dashboard { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px; }
+  .cabecalho-portfolios-dashboard h2 { margin: 0; font-size: .78rem; letter-spacing: .07em; white-space: nowrap; }
+  #alternar-portfolios-dashboard { display: grid; width: 32px; height: 32px; flex: 0 0 32px; place-items: center; border: 0; border-radius: 8px; color: var(--dashboard-navy); background: #eef0f6; font-size: 1.35rem; cursor: pointer; }
+  .menu-portfolios-dashboard { display: grid; gap: 7px; }
+  .botao-portfolio-dashboard { width: 100%; padding: 10px 12px; border: 0; border-radius: 8px; color: var(--dashboard-navy); background: #f0f1f6; font: inherit; font-size: .72rem; font-weight: 800; text-align: left; cursor: pointer; }
+  .botao-portfolio-dashboard.ativo { color: #fff; background: var(--dashboard-navy); }
+  .portfolios-recolhidos .cabecalho-portfolios-dashboard { justify-content: center; }
+  .portfolios-recolhidos .cabecalho-portfolios-dashboard h2, .portfolios-recolhidos .menu-portfolios-dashboard { display: none; }
+  .portfolios-recolhidos #alternar-portfolios-dashboard { transform: rotate(180deg); }
+  .conteudo-dashboard { min-width: 0; padding: 16px; }
+  .grade-indicadores-dashboard { display: grid; grid-template-columns: repeat(5, minmax(130px, 1fr)); gap: 11px; }
+  .indicador-dashboard { position: relative; min-width: 0; min-height: 104px; padding: 17px; overflow: hidden; border: 1px solid #e0e2ea; border-radius: 14px; background: #fff; box-shadow: 0 7px 18px rgba(6,6,61,.06); font: inherit; text-align: left; }
+  .indicador-dashboard::after { content: ''; position: absolute; right: -18px; bottom: -28px; width: 78px; height: 78px; border-radius: 50%; background: var(--cor-indicador, #e8e9f3); opacity: .2; }
+  .indicador-dashboard span { display: block; min-height: 30px; color: #6c6d7d; font-size: .65rem; font-weight: 900; letter-spacing: .04em; text-transform: uppercase; }
+  .indicador-dashboard strong { display: block; margin-top: 4px; color: var(--cor-indicador, var(--dashboard-navy)); font-size: 1.65rem; line-height: 1; }
+  .indicador-dashboard small { display: block; margin-top: 7px; color: #858695; font-size: .6rem; }
+  .indicador-dashboard-clicavel { cursor: pointer; transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease; }
+  .indicador-dashboard-clicavel:hover { transform: translateY(-3px); border-color: var(--cor-indicador); box-shadow: 0 10px 23px rgba(6,6,61,.12); }
+  .indicador-dashboard-clicavel:focus-visible { outline: 3px solid rgba(6,6,61,.18); outline-offset: 2px; }
+  .indicador-dashboard-clicavel.ativo { border: 2px solid var(--cor-indicador); box-shadow: 0 10px 23px rgba(6,6,61,.14); }
+  .detalhes-indicador-dashboard {
+    margin-top: 12px; overflow: hidden; border: 1px solid #dfe1e9; border-radius: 14px;
+    background: #fff; box-shadow: 0 7px 18px rgba(6,6,61,.06);
+  }
+  .cabecalho-detalhes-indicador-dashboard {
+    display: flex; min-height: 58px; align-items: center; justify-content: space-between;
+    gap: 16px; padding: 11px 16px; color: #fff; background: var(--dashboard-navy);
+  }
+  .cabecalho-detalhes-indicador-dashboard span {
+    display: block; color: rgba(255,255,255,.7); font-size: .56rem; font-weight: 900;
+    letter-spacing: .09em;
+  }
+  .cabecalho-detalhes-indicador-dashboard h2 { margin: 3px 0 0; font-size: .82rem; }
+  #fechar-detalhes-indicador-dashboard {
+    display: grid; width: 32px; height: 32px; flex: 0 0 32px; place-items: center;
+    padding: 0; border: 0; border-radius: 50%; color: #fff; background: rgba(255,255,255,.13);
+    font: 700 1.3rem/1 Arial, sans-serif; cursor: pointer;
+  }
+  #fechar-detalhes-indicador-dashboard:hover { background: rgba(255,255,255,.24); }
+  #estado-detalhes-indicador-dashboard { padding: 18px; }
+  .tabela-detalhes-indicador-dashboard { min-width: 1320px; }
+  .tabela-detalhes-indicador-dashboard td:nth-child(2) { min-width: 220px; text-align: left; }
+  .tabela-detalhes-indicador-dashboard td:nth-child(4),
+  .tabela-detalhes-indicador-dashboard td:nth-child(10) { min-width: 170px; text-align: left; }
+  .tabela-detalhes-indicador-dashboard td:nth-child(9) { font-weight: 900; }
+  .tags-conclusao-dashboard { display: grid; grid-template-columns: repeat(4, minmax(145px, 1fr)); gap: 9px; margin-top: 11px; }
+  .tag-conclusao-dashboard { display: flex; min-height: 55px; align-items: center; justify-content: space-between; gap: 10px; padding: 11px 14px; border: 1px solid color-mix(in srgb, var(--cor-tag), #fff 65%); border-radius: 11px; background: color-mix(in srgb, var(--cor-tag), #fff 91%); }
+  .tag-conclusao-dashboard span { color: #4e4f61; font-size: .65rem; font-weight: 800; }
+  .tag-conclusao-dashboard strong { color: var(--cor-tag); font-size: 1.25rem; }
+  .grade-graficos-dashboard { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 12px; }
+  .cartao-grafico-dashboard { min-width: 0; padding: 18px; border: 1px solid #e0e2ea; border-radius: 15px; background: #fff; box-shadow: 0 7px 18px rgba(6,6,61,.06); }
+  .grafico-amplo-dashboard { grid-column: 1 / -1; }
+  .titulo-grafico-dashboard span { color: #848595; font-size: .6rem; font-weight: 900; letter-spacing: .1em; }
+  .titulo-grafico-dashboard h2 { margin: 3px 0 15px; font-size: .84rem; }
+  .area-rosca-dashboard { display: flex; min-height: 260px; align-items: center; justify-content: center; gap: 20px; }
+  #grafico-conclusao { width: min(100%, 360px); height: auto; }
+  .legenda-grafico-dashboard { display: grid; gap: 8px; min-width: 145px; }
+  .item-legenda-dashboard { display: flex; align-items: center; gap: 7px; color: #555668; font-size: .68rem; }
+  .item-legenda-dashboard i { width: 10px; height: 10px; flex: 0 0 10px; border-radius: 50%; }
+  .grafico-barras-dashboard { display: grid; gap: 12px; align-content: center; min-height: 250px; }
+  .linha-barra-dashboard { display: grid; grid-template-columns: minmax(115px, .7fr) minmax(160px, 2fr) 38px; align-items: center; gap: 9px; color: #555668; font-size: .67rem; font-weight: 800; }
+  .trilho-barra-dashboard { height: 13px; overflow: hidden; border-radius: 999px; background: #eceef3; }
+  .valor-barra-dashboard { display: block; height: 100%; min-width: 3px; border-radius: inherit; background: var(--cor-barra, var(--dashboard-navy)); }
+  .tabela-atrasos-dashboard { min-width: 1000px; }
+  .tabela-atrasos-dashboard td:nth-child(2), .tabela-atrasos-dashboard td:nth-child(4) { min-width: 210px; text-align: left; }
+  .tabela-atrasos-dashboard td:last-child { color: #c20b2d; font-weight: 900; }
+  .rodape-dashboard { display: flex; min-height: 42px; align-items: center; justify-content: space-between; padding: 7px 16px; color: #747587; background: #fff; font-size: .65rem; font-weight: 800; }
+  .rodape-dashboard img { width: 64px; max-height: 27px; object-fit: contain; }
+  @media (max-width: 1150px) { .filtros-dashboard { grid-template-columns: repeat(3, 1fr); } .grade-indicadores-dashboard { grid-template-columns: repeat(3, 1fr); } }
+  @media (max-width: 800px) { .layout-dashboard { grid-template-columns: 1fr; } .painel-portfolios-dashboard { border-right: 0; border-bottom: 1px solid #e0e2ea; } .menu-portfolios-dashboard { grid-template-columns: repeat(2, 1fr); } #alternar-portfolios-dashboard { display: none; } .grade-indicadores-dashboard, .tags-conclusao-dashboard { grid-template-columns: repeat(2, 1fr); } .grade-graficos-dashboard { grid-template-columns: 1fr; } .grafico-amplo-dashboard { grid-column: auto; } }
+  @media (max-width: 560px) { .filtros-dashboard { grid-template-columns: repeat(2, 1fr); } .grade-indicadores-dashboard, .tags-conclusao-dashboard { grid-template-columns: 1fr; } .area-rosca-dashboard { flex-direction: column; } .conteudo-dashboard { padding: 10px; } }
+</style>

@@ -1,0 +1,1261 @@
+<script>
+  let tempoAviso;
+  let dadosPagina = null;
+  let solicitacoesExibidas = [];
+  let todasSolicitacoes = [];
+  let solicitacoesIniciaisCarregadas = false;
+  let solicitacaoSelecionada = null;
+  let filtrosAtuais = {};
+  let acaoConfirmacao = null;
+  let sequenciaCarregamento = 0;
+  let fotoLiderSolicitacaoBase64 = '';
+  let fotoLiderSolicitacaoTipo = '';
+  let removerFotoLiderSolicitacao = false;
+  let etapaSolicitacaoAtual = 1;
+
+  function mostrarAviso(mensagem, falha) {
+    const aviso = document.getElementById('aviso');
+    clearTimeout(tempoAviso);
+    aviso.textContent = mensagem;
+    aviso.classList.toggle('falha', Boolean(falha));
+    aviso.hidden = false;
+    tempoAviso = setTimeout(function () { aviso.hidden = true; }, 5000);
+  }
+
+  function iniciarPagina() {
+    MaproUI.showLoading('Carregando solicitações...');
+    const inicial = MaproUI.readInitialData();
+    if (inicial && inicial.pagina === 'solicitacoesDeMapro' && inicial.configuracao) {
+      processarInicioSolicitacoes(inicial.configuracao, inicial.solicitacoes || null);
+      return;
+    }
+    google.script.run
+      .withSuccessHandler(function (pacote) {
+        processarInicioSolicitacoes(pacote.configuracao, pacote.solicitacoes);
+      })
+      .withFailureHandler(function () {
+        MaproUI.hideLoading();
+        mostrarFalhaDeAcesso('Falha ao validar seu acesso.');
+      })
+      .carregarPaginaSolicitacoesInicial();
+  }
+
+  function processarInicioSolicitacoes(respostaConfiguracao, respostaSolicitacoes) {
+    if (!respostaConfiguracao.sucesso) {
+      MaproUI.hideLoading();
+      mostrarFalhaDeAcesso(respostaConfiguracao.mensagem);
+      return;
+    }
+    dadosPagina = respostaConfiguracao.dados;
+    configurarPaginaPorPerfil();
+    preencherOpcoes();
+    if (respostaSolicitacoes) {
+      aplicarRespostaSolicitacoes(respostaSolicitacoes, filtrosAtuais);
+      return;
+    }
+    carregarSolicitacoes(filtrosAtuais, true);
+  }
+
+  function mostrarFalhaDeAcesso(mensagem) {
+    const estado = document.getElementById('carregando-solicitacoes');
+    estado.textContent = mensagem;
+    estado.classList.add('estado-tabela-erro');
+    document.querySelectorAll('.barra-ferramentas button').forEach(function (botao) {
+      botao.disabled = true;
+    });
+  }
+
+  function configurarPaginaPorPerfil() {
+    const admin = dadosPagina.usuario.nivel === 'ADMIN';
+    document.getElementById('pagina-solicitacoes-mapro').classList.toggle('perfil-admin', admin);
+    document.getElementById('acoes-admin').hidden = !admin;
+    document.getElementById('acoes-participante').hidden = admin;
+    document.getElementById('id-usuario').value = dadosPagina.usuario.id;
+    atualizarDisponibilidadeAcoes();
+  }
+
+  function atualizarDisponibilidadeAcoes() {
+    const possuiSelecao = Boolean(solicitacaoSelecionada);
+    document.getElementById('visualizar-solicitacao-participante').disabled = !possuiSelecao;
+    if (!dadosPagina || dadosPagina.usuario.nivel !== 'ADMIN') return;
+    const status = solicitacaoSelecionada ? solicitacaoSelecionada.status : '';
+    document.getElementById('visualizar-solicitacao-admin').disabled = !possuiSelecao;
+    document.getElementById('aprovar-solicitacao').disabled = status !== 'PENDENTE';
+    document.getElementById('rejeitar-solicitacao').disabled = status !== 'PENDENTE';
+  }
+
+  function preencherOpcoes() {
+    preencherSelect('portfolio', dadosPagina.portfolios, 'Selecione');
+    preencherSelect('filtro-portfolio', dadosPagina.portfolios, 'Todos');
+    preencherSelect('solicitacao-contagiro', dadosPagina.bases.contagiros, 'Selecione');
+    preencherSelect(
+      'solicitacao-negocio',
+      valoresUnicosEstrategia('negocio'),
+      'Selecione'
+    );
+    preencherSelect('solicitacao-dimensao-bsc', [], 'Selecione o negócio primeiro');
+    preencherSelect('solicitacao-objetivo-bsc', [], 'Selecione a dimensão primeiro');
+
+    const lideres = document.getElementById('opcoes-lideres');
+    lideres.replaceChildren();
+    dadosPagina.usuarios.forEach(function (usuario) {
+      const opcao = document.createElement('button');
+      opcao.type = 'button';
+      opcao.className = 'opcao-pesquisavel';
+      opcao.dataset.id = usuario.id;
+      opcao.dataset.nome = usuario.nome;
+      opcao.textContent = usuario.nome;
+      opcao.setAttribute('role', 'option');
+      opcao.addEventListener('click', function () { selecionarLider(usuario); });
+      lideres.appendChild(opcao);
+    });
+    renderizarOpcoesParticipantes([]);
+  }
+
+  function preencherSelect(id, opcoes, primeiroTexto) {
+    const select = document.getElementById(id);
+    select.replaceChildren(criarOpcao('', primeiroTexto));
+    opcoes.forEach(function (opcao) { select.appendChild(criarOpcao(opcao, opcao)); });
+  }
+
+  function criarOpcao(valor, texto) {
+    const opcao = document.createElement('option');
+    opcao.value = valor;
+    opcao.textContent = texto;
+    return opcao;
+  }
+
+  function valoresUnicosEstrategia(campo, filtros) {
+    const vistos = {};
+    return (dadosPagina.bases.estrategia || []).filter(function (item) {
+      return !filtros || Object.keys(filtros).every(function (chave) {
+        return item[chave] === filtros[chave];
+      });
+    }).map(function (item) { return item[campo]; }).filter(function (valor) {
+      const chave = String(valor || '').trim();
+      if (!chave || vistos[chave]) return false;
+      vistos[chave] = true;
+      return true;
+    }).sort(function (a, b) { return a.localeCompare(b, 'pt-BR'); });
+  }
+
+  function atualizarDimensoesSolicitacao(valorSelecionado) {
+    const negocio = document.getElementById('solicitacao-negocio').value;
+    const dimensoes = valoresUnicosEstrategia('dimensaoBsc', {negocio: negocio});
+    preencherSelect('solicitacao-dimensao-bsc', dimensoes,
+      negocio ? 'Selecione' : 'Selecione o negócio primeiro');
+    if (valorSelecionado && dimensoes.indexOf(valorSelecionado) !== -1) {
+      document.getElementById('solicitacao-dimensao-bsc').value = valorSelecionado;
+    }
+    atualizarObjetivosSolicitacao();
+  }
+
+  function atualizarObjetivosSolicitacao(valorSelecionado) {
+    const negocio = document.getElementById('solicitacao-negocio').value;
+    const dimensao = document.getElementById('solicitacao-dimensao-bsc').value;
+    const objetivos = valoresUnicosEstrategia('objetivoBsc', {
+      negocio: negocio, dimensaoBsc: dimensao
+    });
+    preencherSelect('solicitacao-objetivo-bsc', objetivos,
+      dimensao ? 'Selecione' : 'Selecione a dimensão primeiro');
+    if (valorSelecionado && objetivos.indexOf(valorSelecionado) !== -1) {
+      document.getElementById('solicitacao-objetivo-bsc').value = valorSelecionado;
+    }
+  }
+
+  function renderizarOpcoesParticipantes(nomesSelecionados) {
+    const container = document.getElementById('lista-participantes');
+    container.replaceChildren();
+    document.getElementById('pesquisar-participantes').value = '';
+    dadosPagina.usuarios.forEach(function (usuario) {
+      const label = document.createElement('label');
+      label.className = 'opcao-participante';
+      label.dataset.nomePesquisa = normalizarTextoPesquisaParticipante_(usuario.nome);
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.value = usuario.id;
+      checkbox.dataset.nome = usuario.nome;
+      checkbox.checked = nomesSelecionados.indexOf(usuario.nome) !== -1;
+      checkbox.addEventListener('change', atualizarResumoParticipantes);
+      const nome = document.createElement('span');
+      nome.textContent = usuario.nome;
+      label.append(checkbox, nome);
+      container.appendChild(label);
+    });
+    atualizarResumoParticipantes();
+  }
+
+  function atualizarResumoParticipantes() {
+    const selecionados = obterParticipantesSelecionados();
+    const botao = document.getElementById('alternar-participantes');
+    if (!selecionados.length) botao.textContent = 'Selecione os participantes iniciais';
+    else if (selecionados.length === 1) botao.textContent = '1 participante inicial selecionado';
+    else botao.textContent = selecionados.length + ' participantes iniciais selecionados';
+  }
+
+  function obterParticipantesSelecionados() {
+    return Array.from(document.querySelectorAll('#lista-participantes input:checked'));
+  }
+
+  function sincronizarLiderPesquisa() {
+    const campo = document.getElementById('lider-projeto-pesquisa');
+    const pesquisa = campo.value.trim().toLowerCase();
+    const usuario = dadosPagina.usuarios.find(function (item) {
+      return item.nome.trim().toLowerCase() === pesquisa;
+    });
+    document.getElementById('lider-projeto').value = usuario ? usuario.id : '';
+    preencherDadosAutomaticosLider(usuario);
+    document.querySelectorAll('#opcoes-lideres .opcao-pesquisavel')
+      .forEach(function (opcao) {
+        opcao.hidden = Boolean(pesquisa) &&
+          opcao.dataset.nome.toLowerCase().indexOf(pesquisa) === -1;
+      });
+    mostrarOpcoesLider();
+  }
+
+  function selecionarLider(usuario) {
+    document.getElementById('lider-projeto-pesquisa').value = usuario.nome;
+    document.getElementById('lider-projeto').value = usuario.id;
+    preencherDadosAutomaticosLider(usuario);
+    ocultarOpcoesLider();
+  }
+
+  function preencherDadosAutomaticosLider(usuario) {
+    document.getElementById('solicitacao-departamento').value = usuario
+      ? usuario.departamento : '';
+    document.getElementById('solicitacao-email-lider').value = usuario
+      ? usuario.email : '';
+  }
+
+  function mostrarOpcoesLider() {
+    const opcoes = document.getElementById('opcoes-lideres');
+    opcoes.hidden = false;
+    document.getElementById('lider-projeto-pesquisa').setAttribute('aria-expanded', 'true');
+  }
+
+  function ocultarOpcoesLider() {
+    document.getElementById('opcoes-lideres').hidden = true;
+    document.getElementById('lider-projeto-pesquisa').setAttribute('aria-expanded', 'false');
+  }
+
+  function normalizarTextoPesquisaParticipante_(valor) {
+    return String(valor || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .trim().toLocaleLowerCase('pt-BR');
+  }
+
+  function filtrarParticipantes() {
+    const termo = normalizarTextoPesquisaParticipante_(
+      document.getElementById('pesquisar-participantes').value
+    );
+    document.querySelectorAll('#lista-participantes .opcao-participante')
+      .forEach(function (opcao) {
+        opcao.hidden = Boolean(termo) &&
+          opcao.dataset.nomePesquisa.indexOf(termo) === -1;
+      });
+  }
+
+  function converterNomeProjetoParaCaixaAlta(evento) {
+    const campo = evento.currentTarget;
+    const inicioSelecao = campo.selectionStart;
+    const fimSelecao = campo.selectionEnd;
+    const valorPadronizado = campo.value.toLocaleUpperCase('pt-BR');
+    if (campo.value === valorPadronizado) return;
+    campo.value = valorPadronizado;
+    if (typeof campo.setSelectionRange === 'function') {
+      campo.setSelectionRange(inicioSelecao, fimSelecao);
+    }
+  }
+
+  function carregarSolicitacoes(filtros, forcarServidor) {
+    const carregamentoAtual = ++sequenciaCarregamento;
+    const carregando = document.getElementById('carregando-solicitacoes');
+    const vazia = document.getElementById('tabela-vazia');
+    const container = document.getElementById('tabela-container');
+    carregando.textContent = 'Carregando solicitações...';
+    carregando.hidden = false;
+    vazia.hidden = true;
+    container.hidden = true;
+
+    if (solicitacoesIniciaisCarregadas && !forcarServidor) {
+      solicitacoesExibidas = filtrarSolicitacoesLocalmente(todasSolicitacoes, filtros || {});
+      solicitacaoSelecionada = null;
+      atualizarDisponibilidadeAcoes();
+      carregando.hidden = true;
+      renderizarSolicitacoes();
+      return;
+    }
+
+    MaproUI.showLoading('Carregando solicitações...');
+    google.script.run
+      .withSuccessHandler(function (resposta) {
+        if (carregamentoAtual !== sequenciaCarregamento) return;
+        aplicarRespostaSolicitacoes(resposta, filtros || {});
+      })
+      .withFailureHandler(function () {
+        if (carregamentoAtual !== sequenciaCarregamento) return;
+        MaproUI.hideLoading();
+        carregando.hidden = true;
+        vazia.textContent = 'Falha ao carregar as solicitações.';
+        vazia.hidden = false;
+      })
+      .listarSolicitacoesMapro({});
+  }
+
+  function aplicarRespostaSolicitacoes(resposta, filtros) {
+    MaproUI.hideLoading();
+    const carregando = document.getElementById('carregando-solicitacoes');
+    const vazia = document.getElementById('tabela-vazia');
+    carregando.hidden = true;
+    if (!resposta.sucesso) {
+      vazia.textContent = resposta.mensagem;
+      vazia.hidden = false;
+      mostrarAviso(resposta.mensagem, true);
+      return;
+    }
+    todasSolicitacoes = resposta.dados || [];
+    solicitacoesIniciaisCarregadas = true;
+    preencherMenusPesquisaSolicitacoes();
+    solicitacoesExibidas = filtrarSolicitacoesLocalmente(todasSolicitacoes, filtros || {});
+    solicitacaoSelecionada = null;
+    atualizarDisponibilidadeAcoes();
+    renderizarSolicitacoes();
+  }
+
+  function configuracoesMenusPesquisaSolicitacoes() {
+    return [
+      {
+        campoId: 'filtro-id', listaId: 'opcoes-filtro-solicitacao-id',
+        valor: 'idSolicitacao', apoio: 'nomeProjeto'
+      },
+      {
+        campoId: 'filtro-projeto', listaId: 'opcoes-filtro-solicitacao-projeto',
+        valor: 'nomeProjeto', apoio: 'idSolicitacao'
+      }
+    ];
+  }
+
+  function normalizarPesquisaSolicitacao_(valor) {
+    return String(valor || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .toLocaleLowerCase('pt-BR').trim();
+  }
+
+  function preencherMenusPesquisaSolicitacoes() {
+    configuracoesMenusPesquisaSolicitacoes().forEach(function (configuracao) {
+      const lista = document.getElementById(configuracao.listaId);
+      const vistos = {};
+      const itens = todasSolicitacoes.map(function (solicitacao) {
+        return {
+          valor: String(solicitacao[configuracao.valor] || '').trim(),
+          apoio: String(solicitacao[configuracao.apoio] || '').trim()
+        };
+      }).filter(function (item) {
+        const chave = item.valor.toLocaleLowerCase('pt-BR');
+        if (!item.valor || vistos[chave]) return false;
+        vistos[chave] = true;
+        return true;
+      }).sort(function (a, b) {
+        return a.valor.localeCompare(b.valor, 'pt-BR', {numeric: true});
+      });
+      lista.replaceChildren();
+      itens.forEach(function (item) {
+        const opcao = document.createElement('button');
+        opcao.type = 'button';
+        opcao.className = 'opcao-pesquisavel';
+        opcao.dataset.busca = normalizarPesquisaSolicitacao_(item.valor + ' ' + item.apoio);
+        opcao.textContent = item.valor;
+        if (item.apoio && item.apoio !== item.valor) {
+          const apoio = document.createElement('small');
+          apoio.textContent = configuracao.valor === 'idSolicitacao'
+            ? item.apoio : 'ID ' + item.apoio;
+          opcao.appendChild(apoio);
+        }
+        opcao.addEventListener('click', function () {
+          document.getElementById(configuracao.campoId).value = item.valor;
+          fecharMenuPesquisaSolicitacao_(configuracao);
+        });
+        lista.appendChild(opcao);
+      });
+    });
+  }
+
+  function abrirMenuPesquisaSolicitacao_(configuracao) {
+    configuracoesMenusPesquisaSolicitacoes().forEach(function (item) {
+      if (item.campoId !== configuracao.campoId) fecharMenuPesquisaSolicitacao_(item);
+    });
+    const campo = document.getElementById(configuracao.campoId);
+    const lista = document.getElementById(configuracao.listaId);
+    const busca = normalizarPesquisaSolicitacao_(campo.value);
+    let visiveis = 0;
+    lista.querySelectorAll('.opcao-pesquisavel').forEach(function (opcao) {
+      const corresponde = !busca || opcao.dataset.busca.indexOf(busca) !== -1;
+      opcao.hidden = !corresponde;
+      if (corresponde) visiveis += 1;
+    });
+    lista.hidden = !visiveis;
+    campo.setAttribute('aria-expanded', String(Boolean(visiveis)));
+  }
+
+  function fecharMenuPesquisaSolicitacao_(configuracao) {
+    document.getElementById(configuracao.listaId).hidden = true;
+    document.getElementById(configuracao.campoId).setAttribute('aria-expanded', 'false');
+  }
+
+  function configurarMenusPesquisaSolicitacoes() {
+    configuracoesMenusPesquisaSolicitacoes().forEach(function (configuracao) {
+      const campo = document.getElementById(configuracao.campoId);
+      campo.addEventListener('focus', function () { abrirMenuPesquisaSolicitacao_(configuracao); });
+      campo.addEventListener('click', function () { abrirMenuPesquisaSolicitacao_(configuracao); });
+      campo.addEventListener('input', function () { abrirMenuPesquisaSolicitacao_(configuracao); });
+      campo.addEventListener('keydown', function (evento) {
+        if (evento.key === 'Escape') {
+          evento.stopPropagation();
+          fecharMenuPesquisaSolicitacao_(configuracao);
+        }
+        if (evento.key === 'ArrowDown') {
+          const primeira = document.getElementById(configuracao.listaId)
+            .querySelector('.opcao-pesquisavel:not([hidden])');
+          if (primeira) { evento.preventDefault(); primeira.focus(); }
+        }
+      });
+    });
+  }
+
+  function filtrarSolicitacoesLocalmente(solicitacoes, filtros) {
+    const normalizar = function (valor) {
+      return String(valor || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        .toLocaleLowerCase('pt-BR').trim();
+    };
+    const id = String(filtros.id || '').trim().replace(/^0+/, '') || '';
+    const status = String(filtros.status || '').toUpperCase();
+    const dataCriacao = String(filtros.dataCriacao || '').trim();
+    return solicitacoes.filter(function (item) {
+      const idItem = String(item.idSolicitacao || '').replace(/^0+/, '') || '0';
+      return (!id || idItem.indexOf(id) !== -1) &&
+        (!normalizar(filtros.projeto) || normalizar(item.nomeProjeto).indexOf(normalizar(filtros.projeto)) !== -1) &&
+        (!dataCriacao || dataIsoCriacaoSolicitacao_(item.criadoEm) === dataCriacao) &&
+        (!normalizar(filtros.portfolio) || normalizar(item.portfolio) === normalizar(filtros.portfolio)) &&
+        (!status || status === 'TODOS' || String(item.status).toUpperCase() === status);
+    });
+  }
+
+  function dataIsoCriacaoSolicitacao_(valor) {
+    const data = new Date(valor);
+    if (Number.isNaN(data.getTime())) return '';
+    const partes = new Intl.DateTimeFormat('pt-BR', {
+      timeZone: 'America/Sao_Paulo',
+      day: '2-digit', month: '2-digit', year: 'numeric'
+    }).formatToParts(data).reduce(function (resultado, parte) {
+      resultado[parte.type] = parte.value;
+      return resultado;
+    }, {});
+    return partes.year + '-' + partes.month + '-' + partes.day;
+  }
+
+  function renderizarSolicitacoes() {
+    const corpo = document.getElementById('corpo-tabela-solicitacoes');
+    const vazia = document.getElementById('tabela-vazia');
+    const container = document.getElementById('tabela-container');
+    corpo.replaceChildren();
+    if (!solicitacoesExibidas.length) {
+      vazia.textContent = 'Nenhuma solicitação foi encontrada.';
+      vazia.hidden = false;
+      container.hidden = true;
+      return;
+    }
+
+    solicitacoesExibidas.forEach(function (item) {
+      const linha = document.createElement('tr');
+      linha.tabIndex = 0;
+      adicionarCelula(linha, item.idSolicitacao);
+      adicionarCelula(linha, item.nome);
+      adicionarCelula(linha, item.portfolio);
+      adicionarCelula(linha, item.nomeProjeto);
+      adicionarCelula(linha, item.liderProjeto);
+      adicionarCelula(linha, item.participantes);
+
+      const celulaStatus = document.createElement('td');
+      const status = document.createElement('span');
+      status.className = 'status-usuario status-' + item.status.toLowerCase();
+      status.textContent = item.status;
+      celulaStatus.appendChild(status);
+      linha.appendChild(celulaStatus);
+      adicionarCelula(linha, item.motivoRejeicao);
+      adicionarCelula(linha, formatarData(item.criadoEm));
+      adicionarCelula(linha, formatarData(item.atualizadoEm));
+
+      linha.addEventListener('click', function () { selecionarSolicitacao(item, linha); });
+      linha.addEventListener('keydown', function (evento) {
+        if (evento.key === 'Enter' || evento.key === ' ') {
+          evento.preventDefault();
+          selecionarSolicitacao(item, linha);
+        }
+      });
+      corpo.appendChild(linha);
+    });
+    vazia.hidden = true;
+    container.hidden = false;
+  }
+
+  function adicionarCelula(linha, valor) {
+    const celula = document.createElement('td');
+    celula.textContent = String(valor || '—');
+    linha.appendChild(celula);
+  }
+
+  function selecionarSolicitacao(item, linha) {
+    solicitacaoSelecionada = item;
+    document.querySelectorAll('.tabela-solicitacoes tbody tr').forEach(function (registro) {
+      registro.classList.toggle('linha-selecionada', registro === linha);
+    });
+    atualizarDisponibilidadeAcoes();
+  }
+
+  function formatarData(valor) {
+    if (!valor) return '—';
+    const data = new Date(valor);
+    if (Number.isNaN(data.getTime())) return String(valor);
+    const dataFormatada = new Intl.DateTimeFormat('pt-BR', {
+      timeZone: 'America/Sao_Paulo',
+      day: '2-digit', month: '2-digit', year: 'numeric'
+    }).format(data);
+    const horaFormatada = new Intl.DateTimeFormat('pt-BR', {
+      timeZone: 'America/Sao_Paulo',
+      hour: '2-digit', minute: '2-digit', hour12: false
+    }).format(data);
+    return dataFormatada + ' ' + horaFormatada;
+  }
+
+  function preencherDetalheSolicitacaoAdmin(campo, valor) {
+    const elemento = document.querySelector('[data-detalhe-solicitacao="' + campo + '"]');
+    if (!elemento) return;
+    const texto = valor == null || String(valor).trim() === '' ? '—' : String(valor);
+    elemento.textContent = texto;
+  }
+
+  function exibirFotoDetalhesSolicitacaoAdmin(origem, mensagem) {
+    const imagem = document.getElementById('foto-detalhes-solicitacao-admin');
+    const placeholder = document.getElementById('placeholder-foto-detalhes-admin');
+    imagem.src = origem || '';
+    imagem.hidden = !origem;
+    placeholder.hidden = Boolean(origem);
+    placeholder.textContent = mensagem || 'SEM IMAGEM';
+  }
+
+  function carregarFotoDetalhesSolicitacaoAdmin(idSolicitacao) {
+    exibirFotoDetalhesSolicitacaoAdmin('', 'CARREGANDO IMAGEM...');
+    google.script.run.withSuccessHandler(function (resposta) {
+      const modal = document.getElementById('modal-detalhes-solicitacao-admin');
+      if (modal.hidden || !solicitacaoSelecionada ||
+          String(solicitacaoSelecionada.idSolicitacao) !== String(idSolicitacao)) return;
+      if (resposta.sucesso && resposta.dados && resposta.dados.imagem) {
+        exibirFotoDetalhesSolicitacaoAdmin(resposta.dados.imagem);
+        return;
+      }
+      exibirFotoDetalhesSolicitacaoAdmin('', 'SEM IMAGEM');
+      if (!resposta.sucesso) mostrarAviso(resposta.mensagem, true);
+    }).withFailureHandler(function () {
+      const modal = document.getElementById('modal-detalhes-solicitacao-admin');
+      if (!modal.hidden) {
+        exibirFotoDetalhesSolicitacaoAdmin('', 'IMAGEM INDISPONÍVEL');
+        mostrarAviso('Não foi possível carregar a imagem do líder.', true);
+      }
+    }).obterFotoLiderSolicitacaoMapro(idSolicitacao);
+  }
+
+  function abrirDetalhesSolicitacao() {
+    if (!dadosPagina || !dadosPagina.usuario) return;
+    if (!solicitacaoSelecionada) {
+      mostrarAviso('Selecione uma solicitação para visualizar.', true);
+      return;
+    }
+
+    const item = solicitacaoSelecionada;
+    [
+      'idSolicitacao', 'idUsuario', 'nome', 'emailUsuario', 'portfolio',
+      'nomeProjeto', 'participantes', 'idLider', 'liderProjeto', 'departamento',
+      'emailLider', 'negocio', 'dimensaoBsc', 'objetivoBsc', 'nivel', 'contagiro',
+      'oQueE', 'porque', 'resultadosEsperados', 'possuiIndicadoresDefinidos',
+      'indicadores', 'processoCritico', 'envolveSistema', 'sistemasEnvolvidos',
+      'status', 'motivoRejeicao'
+    ].forEach(function (campo) {
+      preencherDetalheSolicitacaoAdmin(campo, item[campo]);
+    });
+    preencherDetalheSolicitacaoAdmin('criadoEm', formatarData(item.criadoEm));
+    preencherDetalheSolicitacaoAdmin('atualizadoEm', formatarData(item.atualizadoEm));
+    exibirFotoDetalhesSolicitacaoAdmin('', item.possuiFotoLider ? 'CARREGANDO IMAGEM...' : 'SEM IMAGEM');
+    abrirModal('modal-detalhes-solicitacao-admin');
+    if (item.possuiFotoLider) carregarFotoDetalhesSolicitacaoAdmin(item.idSolicitacao);
+  }
+
+  function abrirModal(id) {
+    const modal = document.getElementById(id);
+    modal.hidden = false;
+    document.body.classList.add('modal-aberto');
+    const primeiro = modal.querySelector('input:not([readonly]), select, textarea, button');
+    if (primeiro) primeiro.focus();
+  }
+
+  function fecharModal(id) {
+    document.getElementById(id).hidden = true;
+    if (!document.querySelector('.fundo-modal:not([hidden])')) {
+      document.body.classList.remove('modal-aberto');
+    }
+  }
+
+  function exibirFotoLiderSolicitacao(origem) {
+    const imagem = document.getElementById('foto-lider-solicitacao');
+    const placeholder = document.getElementById('placeholder-foto-lider-solicitacao');
+    imagem.src = origem || '';
+    imagem.hidden = !origem;
+    placeholder.hidden = Boolean(origem);
+    document.getElementById('remover-foto-lider-solicitacao').hidden = !origem;
+  }
+
+  function redefinirFotoLiderSolicitacao() {
+    fotoLiderSolicitacaoBase64 = '';
+    fotoLiderSolicitacaoTipo = '';
+    removerFotoLiderSolicitacao = false;
+    document.getElementById('arquivo-foto-lider-solicitacao').value = '';
+    exibirFotoLiderSolicitacao('');
+  }
+
+  function carregarFotoExistenteSolicitacao(idSolicitacao) {
+    if (!idSolicitacao) return;
+    MaproUI.showLoading('Carregando imagem do líder...');
+    google.script.run.withSuccessHandler(function (resposta) {
+      MaproUI.hideLoading();
+      if (resposta.sucesso && resposta.dados.imagem) {
+        exibirFotoLiderSolicitacao(resposta.dados.imagem);
+      } else if (!resposta.sucesso) {
+        mostrarAviso(resposta.mensagem, true);
+      }
+    }).withFailureHandler(function () {
+      MaproUI.hideLoading();
+      mostrarAviso('Não foi possível carregar a imagem do líder.', true);
+    }).obterFotoLiderSolicitacaoMapro(idSolicitacao);
+  }
+
+  function selecionarArquivoFotoLiderSolicitacao(evento) {
+    const arquivo = evento.target.files && evento.target.files[0];
+    if (!arquivo) return;
+    if (['image/jpeg', 'image/png', 'image/webp'].indexOf(arquivo.type) === -1 ||
+        arquivo.size > (6 * 1024 * 1024)) {
+      evento.target.value = '';
+      return mostrarAviso('Selecione uma imagem JPG, PNG ou WEBP de até 6 MB.', true);
+    }
+    const leitor = new FileReader();
+    leitor.onload = function () {
+      const imagem = new Image();
+      imagem.onload = function () {
+        const limite = 520;
+        const escala = Math.min(1, limite / Math.max(imagem.width, imagem.height));
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(imagem.width * escala));
+        canvas.height = Math.max(1, Math.round(imagem.height * escala));
+        canvas.getContext('2d').drawImage(imagem, 0, 0, canvas.width, canvas.height);
+        const origem = canvas.toDataURL('image/jpeg', .82);
+        fotoLiderSolicitacaoTipo = 'image/jpeg';
+        fotoLiderSolicitacaoBase64 = origem.split(',')[1];
+        removerFotoLiderSolicitacao = false;
+        exibirFotoLiderSolicitacao(origem);
+      };
+      imagem.onerror = function () { mostrarAviso('Não foi possível ler a imagem.', true); };
+      imagem.src = leitor.result;
+    };
+    leitor.readAsDataURL(arquivo);
+  }
+
+  function mostrarEtapaSolicitacao(numero, focarCampo) {
+    etapaSolicitacaoAtual = Math.max(1, Math.min(4, Number(numero) || 1));
+    document.querySelectorAll('[data-etapa-solicitacao]').forEach(function (secao) {
+      secao.hidden = Number(secao.dataset.etapaSolicitacao) !== etapaSolicitacaoAtual;
+    });
+    document.querySelectorAll('[data-indicador-etapa]').forEach(function (item) {
+      const numeroItem = Number(item.dataset.indicadorEtapa);
+      item.classList.toggle('etapa-atual', numeroItem === etapaSolicitacaoAtual);
+      item.classList.toggle('etapa-concluida', numeroItem < etapaSolicitacaoAtual);
+      if (numeroItem === etapaSolicitacaoAtual) item.setAttribute('aria-current', 'step');
+      else item.removeAttribute('aria-current');
+    });
+    ocultarOpcoesLider();
+    document.getElementById('opcoes-participantes').hidden = true;
+    document.getElementById('alternar-participantes').setAttribute('aria-expanded', 'false');
+    const modal = document.querySelector('#modal-solicitacao .modal-cabecalho-solicitacao');
+    if (modal) modal.scrollTop = 0;
+    if (focarCampo) {
+      const etapa = document.querySelector(
+        '[data-etapa-solicitacao="' + etapaSolicitacaoAtual + '"]'
+      );
+      const campo = etapa && etapa.querySelector('select:not([disabled]), input:not([readonly]), textarea');
+      if (campo) setTimeout(function () { campo.focus(); }, 0);
+    }
+  }
+
+  function invalidarEtapaSolicitacao(mensagem, campo) {
+    mostrarAviso(mensagem, true);
+    if (campo && typeof campo.focus === 'function') campo.focus();
+    return false;
+  }
+
+  function obterValorRadioSolicitacao(nome) {
+    const selecionado = document.querySelector('input[name="' + nome + '"]:checked');
+    return selecionado ? selecionado.value : '';
+  }
+
+  function selecionarRadioSolicitacao(nome, valor) {
+    document.querySelectorAll('input[name="' + nome + '"]').forEach(function (campo) {
+      campo.checked = campo.value === String(valor || '').toUpperCase();
+    });
+  }
+
+  function atualizarCamposComplementaresSolicitacao() {
+    const possuiIndicadores = obterValorRadioSolicitacao('possui-indicadores-solicitacao') === 'SIM';
+    const campoIndicadores = document.getElementById('campo-indicadores-solicitacao');
+    const indicadores = document.getElementById('solicitacao-indicadores');
+    campoIndicadores.hidden = !possuiIndicadores;
+    indicadores.disabled = !possuiIndicadores;
+    indicadores.required = possuiIndicadores;
+
+    const envolveSistema = obterValorRadioSolicitacao('envolve-sistema-solicitacao') === 'SIM';
+    const campoSistemas = document.getElementById('campo-sistemas-solicitacao');
+    const sistemas = document.getElementById('solicitacao-sistemas');
+    campoSistemas.hidden = !envolveSistema;
+    sistemas.disabled = !envolveSistema;
+    sistemas.required = envolveSistema;
+  }
+
+  function validarEtapaSolicitacao(numero) {
+    if (numero === 1) {
+      const portfolio = document.getElementById('portfolio');
+      const projeto = document.getElementById('nome-projeto');
+      const liderPesquisa = document.getElementById('lider-projeto-pesquisa');
+      if (!portfolio.value) return invalidarEtapaSolicitacao('Selecione o portfólio.', portfolio);
+      if (projeto.value.trim().length < 3) {
+        return invalidarEtapaSolicitacao('Informe o nome do projeto.', projeto);
+      }
+      if (!obterParticipantesSelecionados().length) {
+        return invalidarEtapaSolicitacao(
+          'Selecione ao menos um participante inicial.',
+          document.getElementById('alternar-participantes')
+        );
+      }
+      if (!document.getElementById('lider-projeto').value) {
+        return invalidarEtapaSolicitacao('Selecione o líder do projeto.', liderPesquisa);
+      }
+      if (!document.getElementById('solicitacao-departamento').value.trim()) {
+        return invalidarEtapaSolicitacao(
+          'O líder selecionado precisa possuir departamento cadastrado.', liderPesquisa
+        );
+      }
+      if (!document.getElementById('solicitacao-email-lider').value.trim()) {
+        return invalidarEtapaSolicitacao(
+          'O líder selecionado precisa possuir e-mail cadastrado.', liderPesquisa
+        );
+      }
+      if (document.getElementById('foto-lider-solicitacao').hidden) {
+        return invalidarEtapaSolicitacao(
+          'Adicione a imagem do líder para avançar.',
+          document.getElementById('acionador-foto-lider-solicitacao')
+        );
+      }
+      return true;
+    }
+    if (numero === 2) {
+      const campos = [
+        ['solicitacao-negocio', 'Selecione o Negócio.'],
+        ['solicitacao-dimensao-bsc', 'Selecione a Dimensão BSC.'],
+        ['solicitacao-objetivo-bsc', 'Selecione o Objetivo BSC.'],
+        ['solicitacao-nivel', 'Selecione o nível do projeto.'],
+        ['solicitacao-contagiro', 'Selecione a Contagiro de acompanhamento.']
+      ];
+      for (let indice = 0; indice < campos.length; indice += 1) {
+        const campo = document.getElementById(campos[indice][0]);
+        if (!campo.value) return invalidarEtapaSolicitacao(campos[indice][1], campo);
+      }
+      return true;
+    }
+    if (numero === 3) {
+      const textos = [
+      ['solicitacao-o-que-e', 'Preencha o campo O que é o projeto.'],
+      ['solicitacao-porque', 'Preencha o campo Por que.'],
+      ['solicitacao-resultados', 'Preencha os Resultados esperados.']
+      ];
+      for (let indice = 0; indice < textos.length; indice += 1) {
+        const campo = document.getElementById(textos[indice][0]);
+        if (campo.value.trim().length < 3) {
+          return invalidarEtapaSolicitacao(textos[indice][1], campo);
+        }
+      }
+      return true;
+    }
+
+    const possuiIndicadores = obterValorRadioSolicitacao('possui-indicadores-solicitacao');
+    const processoCritico = obterValorRadioSolicitacao('processo-critico-solicitacao');
+    const envolveSistema = obterValorRadioSolicitacao('envolve-sistema-solicitacao');
+    if (!possuiIndicadores) return invalidarEtapaSolicitacao(
+      'Informe se o projeto já possui indicadores definidos.',
+      document.querySelector('input[name="possui-indicadores-solicitacao"]')
+    );
+    if (possuiIndicadores === 'SIM' &&
+        document.getElementById('solicitacao-indicadores').value.trim().length < 3) {
+      return invalidarEtapaSolicitacao(
+        'Informe os indicadores do projeto.', document.getElementById('solicitacao-indicadores')
+      );
+    }
+    if (!processoCritico) return invalidarEtapaSolicitacao(
+      'Informe se é um processo crítico.',
+      document.querySelector('input[name="processo-critico-solicitacao"]')
+    );
+    if (!envolveSistema) return invalidarEtapaSolicitacao(
+      'Informe se o projeto envolverá algum sistema.',
+      document.querySelector('input[name="envolve-sistema-solicitacao"]')
+    );
+    if (envolveSistema === 'SIM' &&
+        document.getElementById('solicitacao-sistemas').value.trim().length < 3) {
+      return invalidarEtapaSolicitacao(
+        'Informe qual ou quais sistemas serão envolvidos.',
+        document.getElementById('solicitacao-sistemas')
+      );
+    }
+    return true;
+  }
+
+  function avancarEtapaSolicitacao() {
+    if (!validarEtapaSolicitacao(etapaSolicitacaoAtual)) return;
+    mostrarEtapaSolicitacao(etapaSolicitacaoAtual + 1, true);
+  }
+
+  function voltarEtapaSolicitacao() {
+    mostrarEtapaSolicitacao(etapaSolicitacaoAtual - 1, true);
+  }
+
+  function abrirInformacoesEtapaSolicitacao(numero) {
+    const etapa = Number(numero) || etapaSolicitacaoAtual;
+    const titulos = {
+      1: 'COMO PREENCHER — IDENTIFICAÇÃO',
+      2: 'COMO PREENCHER — CLASSIFICAÇÃO',
+      3: 'COMO PREENCHER — PLANO DO PROJETO',
+      4: 'COMO PREENCHER — INFORMAÇÕES COMPLEMENTARES'
+    };
+    document.getElementById('titulo-informacao-solicitacao').textContent = titulos[etapa];
+    document.querySelectorAll('[data-conteudo-informacao-etapa]').forEach(function (secao) {
+      secao.hidden = Number(secao.dataset.conteudoInformacaoEtapa) !== etapa;
+    });
+    abrirModal('modal-informacao-cabecalho-solicitacao');
+  }
+
+  function abrirNovaSolicitacao() {
+    if (!dadosPagina.portfolios.length) {
+      return mostrarAviso(
+        'Cadastre opções na coluna PORTFÓLIO da aba BASE_PORTFÓLIO antes de solicitar uma Mapro.',
+        true
+      );
+    }
+    document.getElementById('formulario-solicitacao').reset();
+    document.getElementById('id-solicitacao').value = '';
+    document.getElementById('id-usuario').value = dadosPagina.usuario.id;
+    document.getElementById('id-mapro-previa').value =
+      dadosPagina.proximoIdSolicitacao || '—';
+    preencherDadosAutomaticosLider(null);
+    atualizarDimensoesSolicitacao();
+    redefinirFotoLiderSolicitacao();
+    atualizarCamposComplementaresSolicitacao();
+    mostrarEtapaSolicitacao(1);
+    document.getElementById('titulo-modal-solicitacao').textContent = 'SOLICITAR MAPRO';
+    document.getElementById('salvar-solicitacao').textContent = 'SOLICITAR';
+    renderizarOpcoesParticipantes([]);
+    abrirModal('modal-solicitacao');
+  }
+
+  function abrirEdicaoSolicitacao() {
+    if (!solicitacaoSelecionada) return mostrarAviso('Selecione uma solicitação para editar.', true);
+    if (solicitacaoSelecionada.status !== 'PENDENTE') {
+      return mostrarAviso('Somente solicitações pendentes podem ser editadas.', true);
+    }
+    document.getElementById('id-solicitacao').value = solicitacaoSelecionada.idSolicitacao;
+    document.getElementById('id-usuario').value = solicitacaoSelecionada.idUsuario;
+    document.getElementById('portfolio').value = solicitacaoSelecionada.portfolio;
+    document.getElementById('nome-projeto').value = solicitacaoSelecionada.nomeProjeto;
+    const lider = dadosPagina.usuarios.find(function (usuario) {
+      return usuario.id === solicitacaoSelecionada.idLider ||
+        usuario.nome === solicitacaoSelecionada.liderProjeto;
+    });
+    document.getElementById('lider-projeto').value = lider ? lider.id : '';
+    document.getElementById('lider-projeto-pesquisa').value = lider ? lider.nome : '';
+    preencherDadosAutomaticosLider(lider);
+    document.getElementById('id-mapro-previa').value = solicitacaoSelecionada.idSolicitacao;
+    document.getElementById('solicitacao-contagiro').value = solicitacaoSelecionada.contagiro;
+    document.getElementById('solicitacao-nivel').value = solicitacaoSelecionada.nivel;
+    document.getElementById('solicitacao-negocio').value = solicitacaoSelecionada.negocio;
+    atualizarDimensoesSolicitacao(solicitacaoSelecionada.dimensaoBsc);
+    atualizarObjetivosSolicitacao(solicitacaoSelecionada.objetivoBsc);
+    document.getElementById('solicitacao-o-que-e').value = solicitacaoSelecionada.oQueE;
+    document.getElementById('solicitacao-porque').value = solicitacaoSelecionada.porque;
+    document.getElementById('solicitacao-resultados').value =
+      solicitacaoSelecionada.resultadosEsperados;
+    selecionarRadioSolicitacao(
+      'possui-indicadores-solicitacao', solicitacaoSelecionada.possuiIndicadoresDefinidos
+    );
+    document.getElementById('solicitacao-indicadores').value =
+      solicitacaoSelecionada.indicadores || '';
+    selecionarRadioSolicitacao('processo-critico-solicitacao', solicitacaoSelecionada.processoCritico);
+    selecionarRadioSolicitacao('envolve-sistema-solicitacao', solicitacaoSelecionada.envolveSistema);
+    document.getElementById('solicitacao-sistemas').value =
+      solicitacaoSelecionada.sistemasEnvolvidos || '';
+    atualizarCamposComplementaresSolicitacao();
+    redefinirFotoLiderSolicitacao();
+    if (solicitacaoSelecionada.possuiFotoLider) {
+      carregarFotoExistenteSolicitacao(solicitacaoSelecionada.idSolicitacao);
+    }
+    const nomes = solicitacaoSelecionada.participantes.split(';')
+      .map(function (nome) { return nome.trim(); }).filter(Boolean);
+    renderizarOpcoesParticipantes(nomes);
+    document.getElementById('titulo-modal-solicitacao').textContent = 'EDITAR SOLICITAÇÃO';
+    document.getElementById('salvar-solicitacao').textContent = 'EDITAR';
+    mostrarEtapaSolicitacao(1);
+    abrirModal('modal-solicitacao');
+  }
+
+  function salvarFormulario(evento) {
+    evento.preventDefault();
+    if (etapaSolicitacaoAtual < 4) {
+      avancarEtapaSolicitacao();
+      return;
+    }
+    if (!validarEtapaSolicitacao(4)) return;
+    const botao = document.getElementById('salvar-solicitacao');
+    const participantes = obterParticipantesSelecionados();
+    if (!participantes.length) {
+      return mostrarAviso('Selecione ao menos um participante inicial.', true);
+    }
+    const textoOriginal = botao.textContent;
+    const dados = {
+      idSolicitacao: document.getElementById('id-solicitacao').value,
+      portfolio: document.getElementById('portfolio').value,
+      nomeProjeto: document.getElementById('nome-projeto').value,
+      liderId: document.getElementById('lider-projeto').value,
+      participanteIds: participantes.map(function (item) { return item.value; }),
+      contagiro: document.getElementById('solicitacao-contagiro').value,
+      nivel: document.getElementById('solicitacao-nivel').value,
+      negocio: document.getElementById('solicitacao-negocio').value,
+      dimensaoBsc: document.getElementById('solicitacao-dimensao-bsc').value,
+      objetivoBsc: document.getElementById('solicitacao-objetivo-bsc').value,
+      oQueE: document.getElementById('solicitacao-o-que-e').value,
+      porque: document.getElementById('solicitacao-porque').value,
+      resultadosEsperados: document.getElementById('solicitacao-resultados').value,
+      possuiIndicadoresDefinidos: obterValorRadioSolicitacao('possui-indicadores-solicitacao'),
+      indicadores: document.getElementById('solicitacao-indicadores').value,
+      processoCritico: obterValorRadioSolicitacao('processo-critico-solicitacao'),
+      envolveSistema: obterValorRadioSolicitacao('envolve-sistema-solicitacao'),
+      sistemasEnvolvidos: document.getElementById('solicitacao-sistemas').value,
+      fotoLiderTipo: fotoLiderSolicitacaoTipo,
+      fotoLiderBase64: fotoLiderSolicitacaoBase64,
+      removerFotoLider: removerFotoLiderSolicitacao
+    };
+    botao.disabled = true;
+    botao.textContent = 'SALVANDO...';
+    MaproUI.showLoading('Salvando solicitação...');
+    google.script.run
+      .withSuccessHandler(function (resposta) {
+        botao.disabled = false;
+        botao.textContent = textoOriginal;
+        if (!resposta.sucesso) {
+          MaproUI.hideLoading();
+          return mostrarAviso(resposta.mensagem, true);
+        }
+        fecharModal('modal-solicitacao');
+        if (!dados.idSolicitacao && resposta.dados && resposta.dados.idSolicitacao) {
+          dadosPagina.proximoIdSolicitacao = String(
+            Number(resposta.dados.idSolicitacao) + 1
+          ).padStart(2, '0');
+        }
+        mostrarAviso(resposta.mensagem);
+        carregarSolicitacoes(filtrosAtuais, true);
+      })
+      .withFailureHandler(function () {
+        MaproUI.hideLoading();
+        botao.disabled = false;
+        botao.textContent = textoOriginal;
+        mostrarAviso('Falha ao salvar a solicitação.', true);
+      })
+      .salvarSolicitacaoMapro(dados);
+  }
+
+  function abrirConfirmacao(tipo, status) {
+    if (!solicitacaoSelecionada) return mostrarAviso('Selecione uma solicitação.', true);
+    if (tipo === 'EXCLUIR' && solicitacaoSelecionada.status !== 'PENDENTE') {
+      return mostrarAviso('Somente solicitações pendentes podem ser excluídas.', true);
+    }
+    if (tipo === 'STATUS' && solicitacaoSelecionada.status !== 'PENDENTE') {
+      return mostrarAviso('Somente solicitações pendentes podem ser aprovadas.', true);
+    }
+    acaoConfirmacao = { tipo: tipo, status: status || '' };
+    const titulo = document.getElementById('titulo-confirmacao-mapro');
+    const texto = document.getElementById('texto-confirmacao-mapro');
+    titulo.textContent = tipo === 'EXCLUIR'
+      ? 'EXCLUIR SOLICITAÇÃO'
+      : 'APROVAR SOLICITAÇÃO';
+    if (tipo === 'EXCLUIR') {
+      MaproUI.renderConfirmationMessage(texto, [
+        'Deseja realmente ',
+        { emphasis: 'EXCLUIR' },
+        ' a solicitação do projeto “',
+        { emphasis: solicitacaoSelecionada.nomeProjeto },
+        '”?'
+      ]);
+    } else {
+      MaproUI.renderConfirmationMessage(texto, [
+        'Deseja ',
+        { emphasis: 'APROVAR' },
+        ' a solicitação do projeto “',
+        { emphasis: solicitacaoSelecionada.nomeProjeto },
+        '”?'
+      ]);
+    }
+    abrirModal('modal-confirmacao-mapro');
+  }
+
+  function abrirRejeicao() {
+    if (!solicitacaoSelecionada) {
+      return mostrarAviso('Selecione uma solicitação para rejeitar.', true);
+    }
+    if (solicitacaoSelecionada.status === 'APROVADA') {
+      return mostrarAviso(
+        'Uma solicitação aprovada não pode ser rejeitada.',
+        true
+      );
+    }
+    if (solicitacaoSelecionada.status !== 'PENDENTE') {
+      return mostrarAviso('Somente solicitações pendentes podem ser rejeitadas.', true);
+    }
+    document.getElementById('formulario-rejeicao-mapro').reset();
+    MaproUI.renderConfirmationMessage(
+      document.getElementById('texto-rejeicao-mapro'),
+      [
+        'Informe o motivo para ',
+        { emphasis: 'REJEITAR' },
+        ' a solicitação do projeto “',
+        { emphasis: solicitacaoSelecionada.nomeProjeto },
+        '”.'
+      ]
+    );
+    abrirModal('modal-rejeicao-mapro');
+    document.getElementById('motivo-rejeicao').focus();
+  }
+
+  function rejeitarSolicitacao(evento) {
+    evento.preventDefault();
+    if (!solicitacaoSelecionada) return;
+    const motivo = document.getElementById('motivo-rejeicao').value.trim();
+    if (motivo.length < 5) {
+      return mostrarAviso('Informe um motivo de rejeição com ao menos 5 caracteres.', true);
+    }
+    const botao = document.getElementById('confirmar-rejeicao-mapro');
+    botao.disabled = true;
+    botao.textContent = 'PROCESSANDO...';
+    MaproUI.showLoading('Rejeitando solicitação...');
+    google.script.run
+      .withSuccessHandler(function (resposta) {
+        botao.disabled = false;
+        botao.textContent = 'REJEITAR';
+        if (!resposta.sucesso) {
+          MaproUI.hideLoading();
+          return mostrarAviso(resposta.mensagem, true);
+        }
+        fecharModal('modal-rejeicao-mapro');
+        mostrarAviso(resposta.mensagem);
+        carregarSolicitacoes(filtrosAtuais, true);
+      })
+      .withFailureHandler(function () {
+        MaproUI.hideLoading();
+        botao.disabled = false;
+        botao.textContent = 'REJEITAR';
+        mostrarAviso('Falha ao rejeitar a solicitação.', true);
+      })
+      .atualizarStatusSolicitacaoMapro(
+        solicitacaoSelecionada.idSolicitacao,
+        'REJEITADA',
+        motivo
+      );
+  }
+
+  function confirmarAcao() {
+    if (!acaoConfirmacao || !solicitacaoSelecionada) return;
+    const botao = document.getElementById('confirmar-acao-mapro');
+    botao.disabled = true;
+    botao.textContent = 'PROCESSANDO...';
+    MaproUI.showLoading('Processando solicitação...');
+    const sucesso = function (resposta) {
+      botao.disabled = false;
+      botao.textContent = 'SIM';
+      if (!resposta.sucesso) {
+        MaproUI.hideLoading();
+        return mostrarAviso(resposta.mensagem, true);
+      }
+      fecharModal('modal-confirmacao-mapro');
+      mostrarAviso(resposta.mensagem);
+      carregarSolicitacoes(filtrosAtuais, true);
+    };
+    const falha = function () {
+      MaproUI.hideLoading();
+      botao.disabled = false;
+      botao.textContent = 'SIM';
+      mostrarAviso('Falha ao concluir a operação.', true);
+    };
+    if (acaoConfirmacao.tipo === 'EXCLUIR') {
+      google.script.run.withSuccessHandler(sucesso).withFailureHandler(falha)
+        .excluirSolicitacaoMapro(solicitacaoSelecionada.idSolicitacao);
+    } else {
+      const referencia = String(document.referrer || '');
+      const urlPublicaEncontrada = referencia.match(
+        /https:\/\/script\.google\.com\/macros\/s\/[A-Za-z0-9_-]+\/exec/
+      );
+      const urlWebAppAtual = urlPublicaEncontrada
+        ? urlPublicaEncontrada[0]
+        : window.location.origin + window.location.pathname;
+      google.script.run.withSuccessHandler(sucesso).withFailureHandler(falha)
+        .atualizarStatusSolicitacaoMapro(
+          solicitacaoSelecionada.idSolicitacao,
+          acaoConfirmacao.status,
+          '',
+          urlWebAppAtual
+        );
+    }
+  }
+
+  function pesquisar(evento) {
+    evento.preventDefault();
+    filtrosAtuais = {
+      id: document.getElementById('filtro-id').value.trim(),
+      projeto: document.getElementById('filtro-projeto').value.trim(),
+      dataCriacao: document.getElementById('filtro-data-criacao').value,
+      portfolio: document.getElementById('filtro-portfolio').value,
+      status: document.getElementById('filtro-status').value
+    };
+    fecharModal('modal-filtros-mapro');
+    carregarSolicitacoes(filtrosAtuais);
+  }
+
+  function limparFiltros() {
+    document.getElementById('formulario-filtros-mapro').reset();
+    filtrosAtuais = {};
+    carregarSolicitacoes(filtrosAtuais);
+    mostrarAviso('Filtros removidos.');
+  }
+
+  function voltarInicio() {
+    if (dadosPagina && dadosPagina.urlAplicacao) {
+      MaproUI.navigate(dadosPagina.urlAplicacao, 'Voltando ao início...');
+    }
+  }
+
+  document.getElementById('voltar-inicio').addEventListener('click', voltarInicio);
+  document.getElementById('nova-solicitacao').addEventListener('click', abrirNovaSolicitacao);
+  document.getElementById('editar-solicitacao').addEventListener('click', abrirEdicaoSolicitacao);
+  document.getElementById('excluir-solicitacao').addEventListener('click', function () {
+    abrirConfirmacao('EXCLUIR');
+  });
+  document.getElementById('visualizar-solicitacao-admin')
+    .addEventListener('click', abrirDetalhesSolicitacao);
+  document.getElementById('visualizar-solicitacao-participante')
+    .addEventListener('click', abrirDetalhesSolicitacao);
+  document.getElementById('aprovar-solicitacao').addEventListener('click', function () {
+    abrirConfirmacao('STATUS', 'APROVADA');
+  });
+  document.getElementById('rejeitar-solicitacao').addEventListener('click', function () {
+    abrirRejeicao();
+  });
+  document.getElementById('abrir-filtros').addEventListener('click', function () {
+    abrirModal('modal-filtros-mapro');
+  });
+  document.getElementById('limpar-filtros').addEventListener('click', limparFiltros);
+  document.getElementById('formulario-solicitacao').addEventListener('submit', salvarFormulario);
+  document.getElementById('formulario-filtros-mapro').addEventListener('submit', pesquisar);
+  document.getElementById('formulario-rejeicao-mapro')
+    .addEventListener('submit', rejeitarSolicitacao);
+  document.getElementById('confirmar-acao-mapro').addEventListener('click', confirmarAcao);
+  document.getElementById('alternar-participantes').addEventListener('click', function () {
+    const opcoes = document.getElementById('opcoes-participantes');
+    opcoes.hidden = !opcoes.hidden;
+    this.setAttribute('aria-expanded', String(!opcoes.hidden));
+  });
+  document.getElementById('lider-projeto-pesquisa')
+    .addEventListener('input', sincronizarLiderPesquisa);
+  document.getElementById('lider-projeto-pesquisa').addEventListener('focus', function () {
+    document.querySelectorAll('#opcoes-lideres .opcao-pesquisavel')
+      .forEach(function (opcao) { opcao.hidden = false; });
+    mostrarOpcoesLider();
+  });
+  document.getElementById('pesquisar-participantes')
+    .addEventListener('input', filtrarParticipantes);
+  document.getElementById('nome-projeto')
+    .addEventListener('input', converterNomeProjetoParaCaixaAlta);
+  document.getElementById('solicitacao-negocio').addEventListener('change', function () {
+    atualizarDimensoesSolicitacao();
+  });
+  document.getElementById('solicitacao-dimensao-bsc').addEventListener('change', function () {
+    atualizarObjetivosSolicitacao();
+  });
+  document.querySelectorAll(
+    'input[name="possui-indicadores-solicitacao"], ' +
+    'input[name="envolve-sistema-solicitacao"]'
+  ).forEach(function (campo) {
+    campo.addEventListener('change', atualizarCamposComplementaresSolicitacao);
+  });
+  document.querySelectorAll('[data-avancar-etapa]').forEach(function (botao) {
+    botao.addEventListener('click', avancarEtapaSolicitacao);
+  });
+  document.querySelectorAll('[data-voltar-etapa]').forEach(function (botao) {
+    botao.addEventListener('click', voltarEtapaSolicitacao);
+  });
+  document.querySelectorAll('[data-informacao-etapa]').forEach(function (botao) {
+    botao.addEventListener('click', function () {
+      abrirInformacoesEtapaSolicitacao(botao.dataset.informacaoEtapa);
+    });
+  });
+  document.getElementById('acionador-foto-lider-solicitacao').addEventListener('click', function () {
+    document.getElementById('arquivo-foto-lider-solicitacao').click();
+  });
+  document.getElementById('arquivo-foto-lider-solicitacao')
+    .addEventListener('change', selecionarArquivoFotoLiderSolicitacao);
+  document.getElementById('remover-foto-lider-solicitacao').addEventListener('click', function () {
+    fotoLiderSolicitacaoBase64 = '';
+    fotoLiderSolicitacaoTipo = '';
+    removerFotoLiderSolicitacao = true;
+    document.getElementById('arquivo-foto-lider-solicitacao').value = '';
+    exibirFotoLiderSolicitacao('');
+  });
+  document.querySelectorAll('[data-fechar-modal]').forEach(function (botao) {
+    botao.addEventListener('click', function () { fecharModal(botao.dataset.fecharModal); });
+  });
+  document.querySelectorAll('.fundo-modal').forEach(function (fundo) {
+    fundo.addEventListener('click', function (evento) {
+      if (evento.target === fundo) fecharModal(fundo.id);
+    });
+  });
+  document.addEventListener('click', function (evento) {
+    if (!evento.target.closest('.campo-filtro-solicitacao')) {
+      configuracoesMenusPesquisaSolicitacoes().forEach(fecharMenuPesquisaSolicitacao_);
+    }
+    const campo = document.querySelector('.campo-multiplo');
+    const opcoes = document.getElementById('opcoes-participantes');
+    if (!opcoes.hidden && !campo.contains(evento.target)) {
+      opcoes.hidden = true;
+      document.getElementById('alternar-participantes').setAttribute('aria-expanded', 'false');
+    }
+    const campoLider = document.getElementById('campo-lider');
+    if (!document.getElementById('opcoes-lideres').hidden &&
+        !campoLider.contains(evento.target)) {
+      ocultarOpcoesLider();
+    }
+  });
+  document.addEventListener('keydown', function (evento) {
+    if (evento.key !== 'Escape') return;
+    const modaisAbertos = document.querySelectorAll('.fundo-modal:not([hidden])');
+    const aberto = modaisAbertos.length ? modaisAbertos[modaisAbertos.length - 1] : null;
+    if (aberto) fecharModal(aberto.id);
+  });
+
+  configurarMenusPesquisaSolicitacoes();
+  iniciarPagina();
+</script>

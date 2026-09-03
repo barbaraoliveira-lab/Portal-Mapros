@@ -1,0 +1,382 @@
+<style>
+  #modal-solicitacao {
+    overflow-y: auto; padding: 12px; place-items: start center;
+  }
+  #modal-solicitacao .modal-cabecalho-solicitacao {
+    width: min(1088px, calc(100vw - 28px)); max-width: none;
+    max-height: none; overflow: visible; margin-block: auto;
+    padding: clamp(24px, 4vw, 42px) clamp(24px, 4vw, 44px) clamp(22px, 3vw, 34px);
+    color: #030441;
+  }
+  .formulario-cabecalho-solicitacao {
+    --tamanho-rotulo-campo: .82rem;
+    --tamanho-conteudo-campo: .88rem;
+    display: grid; gap: 18px;
+    font-family: Arial, Helvetica, sans-serif;
+  }
+
+  .indicador-etapas-solicitacao {
+    display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
+    margin: 0 7%; padding: 0; list-style: none;
+  }
+  .indicador-etapas-solicitacao li {
+    position: relative; display: grid; gap: 5px; justify-items: center;
+    color: #8a8b98; font-size: .72rem; font-weight: 800; text-align: center;
+  }
+  .indicador-etapas-solicitacao li:not(:first-child)::before {
+    content: ''; position: absolute; z-index: 0; top: 14px; right: 50%; width: 100%; height: 3px;
+    background: #d9dbe4;
+  }
+  .indicador-etapas-solicitacao span {
+    position: relative; z-index: 1; display: grid; width: 31px; height: 31px; place-items: center;
+    border: 3px solid #d9dbe4; border-radius: 50%; color: #777887; background: #fff;
+    font-size: .78rem; font-weight: 900;
+  }
+  .indicador-etapas-solicitacao li.etapa-atual,
+  .indicador-etapas-solicitacao li.etapa-concluida { color: #030441; }
+  .indicador-etapas-solicitacao li.etapa-atual span,
+  .indicador-etapas-solicitacao li.etapa-concluida span {
+    border-color: #030441; color: #fff; background: #030441;
+  }
+  .indicador-etapas-solicitacao li.etapa-atual::before,
+  .indicador-etapas-solicitacao li.etapa-concluida::before { background: #030441; }
+
+  .etapa-solicitacao {
+    min-height: 330px; padding: 0; background: #fff;
+  }
+  .etapa-solicitacao[hidden] { display: none; }
+  .titulo-secao-solicitacao {
+    position: relative; margin: 0 0 18px; padding: 3px 44px 10px 0;
+    border-bottom: 1px solid #e2e3e9; color: #030441; background: transparent;
+    text-align: left; font-size: 1rem; font-weight: 900; letter-spacing: .025em;
+  }
+  .botao-informacao-solicitacao {
+    position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
+    width: 24px; height: 24px; min-height: 0; padding: 0; border: 0; border-radius: 50%;
+    color: #fff; background: #030441; font: 900 16px/24px Arial, sans-serif; cursor: pointer;
+  }
+
+  .identificacao-principal-solicitacao label,
+  .campo-nome-projeto-solicitacao,
+  .dados-lider-solicitacao > label,
+  .grade-etapa-classificacao label,
+  .grade-plano-solicitacao label,
+  .foto-lider-solicitacao {
+    display: grid; gap: 0; min-width: 0; margin: 0; color: #030441;
+  }
+  .identificacao-principal-solicitacao b,
+  .campo-nome-projeto-solicitacao b,
+  .dados-lider-solicitacao b,
+  .grade-etapa-classificacao b,
+  .grade-plano-solicitacao b,
+  .foto-lider-solicitacao > b,
+  .participantes-cabecalho-solicitacao > span b {
+    display: block; width: 100%; padding: 0 0 5px; border-radius: 0;
+    color: #030441; background: transparent; text-align: left;
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: var(--tamanho-rotulo-campo); font-weight: 500; line-height: 1.2;
+  }
+  .formulario-cabecalho-solicitacao input,
+  .formulario-cabecalho-solicitacao select,
+  .formulario-cabecalho-solicitacao textarea,
+  .formulario-cabecalho-solicitacao .controle-multiplo {
+    width: 100%; min-height: 42px; padding: 8px 13px; border: 2px solid #dedede;
+    border-radius: 11px; color: #030441; background: #fafafa;
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: var(--tamanho-conteudo-campo); font-weight: 400; line-height: 1.25;
+    outline: none; box-sizing: border-box;
+  }
+  .formulario-cabecalho-solicitacao input::placeholder,
+  .formulario-cabecalho-solicitacao textarea::placeholder {
+    color: #747582; font-family: inherit; font-size: inherit; font-weight: 400; opacity: 1;
+  }
+  .formulario-cabecalho-solicitacao input:focus,
+  .formulario-cabecalho-solicitacao select:focus,
+  .formulario-cabecalho-solicitacao textarea:focus,
+  .formulario-cabecalho-solicitacao .controle-multiplo:focus-visible {
+    border-color: #030441; box-shadow: 0 0 0 3px rgba(3,4,65,.1);
+  }
+  .formulario-cabecalho-solicitacao input[readonly] { color: #7b7b7b; background: #f0f0f0; }
+
+  .grade-etapa-identificacao {
+    display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+    gap: 24px; align-items: start;
+  }
+  .coluna-identificacao-projeto { display: grid; gap: 16px; min-width: 0; }
+  .identificacao-principal-solicitacao {
+    display: grid; grid-template-columns: 90px minmax(0, 1fr);
+    gap: 14px; align-items: start;
+  }
+  .identificacao-principal-solicitacao #id-mapro-previa,
+  .identificacao-principal-solicitacao #portfolio {
+    height: 42px; min-height: 42px;
+  }
+  .painel-lider-solicitacao {
+    display: grid; grid-template-columns: minmax(0, 1fr) 170px; gap: 14px; min-width: 0;
+  }
+  .dados-lider-solicitacao { display: grid; gap: 12px; min-width: 0; align-content: start; }
+  .campo-linha-solicitacao { position: relative; display: grid; gap: 0; min-width: 0; }
+  .campo-linha-solicitacao .opcoes-pesquisaveis { top: calc(100% + 4px); left: 0; right: 0; }
+  #modal-solicitacao .campo-linha-solicitacao,
+  #modal-solicitacao .participantes-cabecalho-solicitacao,
+  #modal-solicitacao .opcao-pesquisavel,
+  #modal-solicitacao .opcao-participante {
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: var(--tamanho-conteudo-campo); font-weight: 400; line-height: 1.25;
+  }
+
+  .participantes-cabecalho-solicitacao { position: relative; display: grid; gap: 0; min-width: 0; }
+  .participantes-cabecalho-solicitacao .controle-multiplo {
+    border: 2px solid #dedede; border-radius: 11px; background: #fafafa;
+  }
+  .participantes-cabecalho-solicitacao .opcoes-multiplas {
+    top: calc(100% + 4px); z-index: 100; max-height: 230px; padding: 8px;
+  }
+  #modal-solicitacao .participantes-cabecalho-solicitacao .pesquisa-multipla {
+    min-height: 36px; margin: 0 0 6px; padding: 7px 10px; border-radius: 7px;
+  }
+  #modal-solicitacao .participantes-cabecalho-solicitacao .opcao-participante {
+    display: flex; width: 100%; min-height: 36px; align-items: center; gap: 9px;
+    padding: 7px 9px; color: #030441; text-align: left;
+  }
+  #modal-solicitacao .participantes-cabecalho-solicitacao .opcao-participante[hidden] {
+    display: none;
+  }
+  #modal-solicitacao .participantes-cabecalho-solicitacao .opcao-participante input[type="checkbox"] {
+    width: 17px; height: 17px; min-height: 17px; flex: 0 0 17px; margin: 0; padding: 0;
+  }
+  #modal-solicitacao .participantes-cabecalho-solicitacao .opcao-participante span {
+    min-width: 0; overflow-wrap: anywhere;
+  }
+
+  .foto-lider-solicitacao {
+    position: relative; grid-template-rows: auto minmax(0, 1fr);
+    width: 170px; height: 218px; min-height: 0; align-self: start;
+  }
+  #acionador-foto-lider-solicitacao {
+    display: grid; width: 100%; height: 100%; min-height: 0; place-items: stretch;
+    overflow: hidden; padding: 0; border: 2px solid #dedede; border-radius: 11px;
+    color: #92939e; background: #fafafa; line-height: 0; cursor: pointer;
+  }
+  #foto-lider-solicitacao {
+    display: block; width: 100%; height: 100%; min-height: 0; border-radius: 0; object-fit: cover;
+  }
+  #foto-lider-solicitacao[hidden], #placeholder-foto-lider-solicitacao[hidden],
+  #remover-foto-lider-solicitacao[hidden] { display: none; }
+  #placeholder-foto-lider-solicitacao {
+    display: grid; gap: 6px; place-items: center; align-content: center;
+    color: #92939e; font-size: .6rem; font-weight: 900; line-height: 1.2; text-align: center;
+  }
+  #placeholder-foto-lider-solicitacao svg {
+    width: 50px; height: 50px; fill: none; stroke: currentColor; stroke-width: 1.4;
+    stroke-linecap: round; stroke-linejoin: round;
+  }
+  #placeholder-foto-lider-solicitacao small { font: inherit; }
+  .remover-foto-solicitacao {
+    position: absolute; z-index: 2; top: 28px; right: 6px; display: grid;
+    width: 18px; height: 18px; min-height: 0; place-items: center; padding: 0;
+    border: 0; border-radius: 50%; color: #c70d2f; background: rgba(255,255,255,.92);
+    font-size: 17px; font-weight: 900; line-height: 1; cursor: pointer;
+  }
+
+  .grade-etapa-classificacao {
+    display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px 18px; max-width: 950px; margin: 10px auto 0;
+  }
+  .grade-etapa-classificacao label:nth-child(3) { grid-column: 1 / -1; }
+  .grade-etapa-classificacao label:last-child { grid-column: 1 / -1; }
+  .grade-plano-solicitacao {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 16px 18px; align-items: stretch;
+  }
+  .grade-plano-solicitacao label {
+    grid-template-rows: auto minmax(120px, 1fr); align-self: stretch;
+  }
+  .grade-plano-solicitacao textarea {
+    height: 100%; min-height: 120px; padding: 10px; resize: vertical;
+  }
+  .resultados-solicitacao { grid-column: 1 / -1; }
+
+  .grade-complementos-solicitacao {
+    display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px 18px; align-items: start;
+  }
+  .pergunta-complementar-solicitacao {
+    min-width: 0; margin: 0; padding: 16px; border: 1px solid #dfe1e8;
+    border-radius: 11px; background: #f8f8fb;
+  }
+  .pergunta-complementar-solicitacao:first-child { grid-column: 1 / -1; }
+  .pergunta-complementar-solicitacao legend {
+    padding: 0 6px; color: #030441; font-size: .9rem; font-weight: 800;
+  }
+  .opcoes-binarias-solicitacao { display: flex; flex-wrap: wrap; gap: 12px; }
+  .opcoes-binarias-solicitacao label {
+    display: flex; min-width: 92px; align-items: center; gap: 8px; padding: 9px 12px;
+    border: 2px solid #dedede; border-radius: 10px; color: #030441; background: #fff;
+    cursor: pointer;
+  }
+  #modal-solicitacao .opcoes-binarias-solicitacao input[type="radio"] {
+    width: 18px; height: 18px; min-height: 18px; flex: 0 0 18px; margin: 0; padding: 0;
+    accent-color: #030441;
+  }
+  .campo-condicional-solicitacao { display: grid; gap: 5px; margin-top: 14px; }
+  #modal-solicitacao .campo-condicional-solicitacao[hidden] { display: none; }
+  .campo-condicional-solicitacao textarea { min-height: 92px; resize: vertical; }
+
+  .acoes-etapa-solicitacao {
+    display: flex; justify-content: space-between; gap: 24px; margin-top: 0;
+    padding-top: clamp(18px, 3vh, 30px);
+  }
+  .botao-voltar-etapa {
+    color: #fff; background: #3ccfea; box-shadow: 0 8px 18px rgba(60,207,234,.32);
+  }
+
+  .modal-detalhes-solicitacao-admin {
+    width: min(1088px, calc(100vw - 28px)); max-height: calc(100svh - 32px);
+    overflow-y: auto; color: #030441;
+  }
+  .grade-detalhes-solicitacao-admin {
+    display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px;
+  }
+  .grade-detalhes-solicitacao-admin > section {
+    overflow: hidden; border: 1px solid #dfe1e8; border-radius: 11px; background: #f8f8fb;
+  }
+  .grade-detalhes-solicitacao-admin h3,
+  .grade-detalhes-solicitacao-admin h4 {
+    margin: 0; padding: 10px 13px; color: #fff; background: #030441;
+    font-size: .76rem; letter-spacing: .035em;
+  }
+  .secao-classificacao-detalhes-admin { display: flex; flex-direction: column; }
+  .subsecao-complementar-detalhes-solicitacao {
+    display: flex; flex: 1; flex-direction: column; margin-top: 0;
+  }
+  .subsecao-complementar-detalhes-solicitacao dl { flex: 1; }
+  .grade-detalhes-solicitacao-admin dl {
+    display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0; margin: 0;
+  }
+  .grade-detalhes-solicitacao-admin dl > div {
+    min-width: 0; padding: 9px 12px; border-right: 1px solid #e2e3e9;
+    border-bottom: 1px solid #e2e3e9;
+  }
+  .grade-detalhes-solicitacao-admin dl > div:nth-child(even) { border-right: 0; }
+  .grade-detalhes-solicitacao-admin dl > .detalhe-largura-total {
+    grid-column: 1 / -1; border-right: 0;
+  }
+  .grade-detalhes-solicitacao-admin dt {
+    margin-bottom: 3px; color: #030441; font-size: .68rem; font-weight: 900;
+  }
+  .grade-detalhes-solicitacao-admin dd {
+    margin: 0; color: #56576a; font-size: .78rem; line-height: 1.4;
+    white-space: pre-wrap; overflow-wrap: anywhere;
+  }
+  .conteudo-lider-detalhes-admin {
+    display: grid; grid-template-columns: minmax(0, 1fr) 150px; min-height: 164px;
+  }
+  .conteudo-lider-detalhes-admin dl { grid-template-columns: 1fr; }
+  .grade-detalhes-solicitacao-admin .conteudo-lider-detalhes-admin dl > div {
+    border-right: 1px solid #e2e3e9;
+  }
+  .secao-classificacao-detalhes-admin dl > div:nth-child(4) {
+    border-right: 1px solid #e2e3e9;
+  }
+  .secao-classificacao-detalhes-admin dl > div:nth-child(5) { border-right: 0; }
+  .foto-detalhes-solicitacao-admin {
+    display: grid; min-width: 0; min-height: 164px; place-items: center; overflow: hidden;
+    margin: 0; color: #8d8e9a; background: #fff; font-size: .63rem; font-weight: 900;
+  }
+  .foto-detalhes-solicitacao-admin img { width: 100%; height: 100%; object-fit: cover; }
+  .foto-detalhes-solicitacao-admin img[hidden],
+  .foto-detalhes-solicitacao-admin span[hidden] { display: none; }
+  .detalhes-plano-admin { grid-template-columns: 1fr !important; }
+  .detalhes-plano-admin > div { min-height: 74px; border-right: 0 !important; }
+  .secao-tramitacao-detalhes-admin { grid-column: 1 / -1; }
+  .modal-detalhes-solicitacao-admin .acoes-modal { padding-top: 18px; justify-content: flex-end; }
+
+  #modal-informacao-cabecalho-solicitacao {
+    overflow-y: auto; place-items: start center;
+  }
+  .modal-informacao-cabecalho-mapro {
+    width: min(1088px, calc(100vw - 28px)); max-height: none;
+    overflow: visible; margin-block: auto; padding: 24px 28px; color: #030441;
+  }
+  .modal-informacao-cabecalho-mapro h2 { margin: 0; color: #030441; }
+  .introducao-informacao-cabecalho-mapro {
+    margin: 8px 34px 18px 0; color: #56576a; font-size: .9rem; line-height: 1.45;
+  }
+  .conteudo-informacao-cabecalho-mapro { display: grid; grid-template-columns: 1fr; gap: 14px; }
+  .conteudo-informacao-cabecalho-mapro section {
+    grid-column: 1 / -1; overflow: hidden; border: 1px solid #dfe1e8;
+    border-radius: 10px; background: #f8f8fb;
+  }
+  .conteudo-informacao-cabecalho-mapro section[hidden] { display: none; }
+  .conteudo-informacao-cabecalho-mapro h3 {
+    margin: 0; padding: 9px 12px; color: #fff; background: #030441;
+    font-size: .73rem; letter-spacing: .035em;
+  }
+  .conteudo-informacao-cabecalho-mapro dl { margin: 0; }
+  .conteudo-informacao-cabecalho-mapro dl > div {
+    display: grid; grid-template-columns: minmax(150px, .75fr) minmax(0, 1.8fr);
+    gap: 10px; padding: 9px 12px; border-bottom: 1px solid #e2e3e9;
+  }
+  .conteudo-informacao-cabecalho-mapro dl > div:last-child { border-bottom: 0; }
+  .conteudo-informacao-cabecalho-mapro dt {
+    font-size: calc(.76rem + 1px); font-weight: 900;
+  }
+  .conteudo-informacao-cabecalho-mapro dd {
+    margin: 0; color: #56576a; font-size: calc(.76rem + 1px); line-height: 1.35;
+  }
+  .lista-detalhes-informacao-mapro {
+    display: grid; gap: 6px; margin: 8px 0 0; padding: 0; list-style: none;
+  }
+  .lista-detalhes-informacao-mapro strong { color: #030441; }
+  .lista-dimensoes-bsc-mapro strong { color: #4f9829; }
+  .lista-dimensoes-bsc-mapro .detalhe-negocio-dimensao-mapro {
+    color: #030441; font-weight: 900;
+  }
+  .modal-informacao-cabecalho-mapro .acoes-modal { margin-top: 18px; }
+
+  @media (min-width: 901px) {
+    #modal-solicitacao .indicador-etapas-solicitacao small {
+      font-size: calc(.72rem + 1px);
+    }
+    #modal-solicitacao .coluna-identificacao-projeto {
+      grid-template-columns: 90px minmax(145px, .85fr) minmax(190px, 1.35fr);
+      gap: 16px 14px;
+    }
+    #modal-solicitacao .identificacao-principal-solicitacao { display: contents; }
+    #modal-solicitacao .participantes-cabecalho-solicitacao { grid-column: 1 / -1; }
+    #modal-solicitacao #id-mapro-previa,
+    #modal-solicitacao #portfolio,
+    #modal-solicitacao #nome-projeto,
+    #modal-solicitacao #lider-projeto-pesquisa,
+    #modal-solicitacao #solicitacao-departamento,
+    #modal-solicitacao #solicitacao-email-lider,
+    #modal-solicitacao #alternar-participantes {
+      height: 42px; min-height: 42px;
+    }
+  }
+
+  @media (max-width: 900px) {
+    .grade-etapa-identificacao { grid-template-columns: 1fr; }
+    .painel-lider-solicitacao { grid-template-columns: minmax(0, 1fr) 170px; }
+  }
+  @media (max-width: 720px) {
+    #modal-solicitacao .modal-cabecalho-solicitacao { padding: 16px 10px; }
+    .indicador-etapas-solicitacao { margin-inline: 0; }
+    .indicador-etapas-solicitacao small { font-size: .62rem; }
+    .identificacao-principal-solicitacao, .painel-lider-solicitacao,
+    .grade-etapa-classificacao, .grade-plano-solicitacao,
+    .grade-complementos-solicitacao { grid-template-columns: 1fr; }
+    .grade-etapa-classificacao label:nth-child(3),
+    .grade-etapa-classificacao label:last-child, .resultados-solicitacao { grid-column: auto; }
+    .pergunta-complementar-solicitacao:first-child { grid-column: auto; }
+    .foto-lider-solicitacao { width: 100%; height: 210px; }
+    .grade-detalhes-solicitacao-admin { grid-template-columns: 1fr; }
+    .secao-tramitacao-detalhes-admin { grid-column: auto; }
+    .conteudo-lider-detalhes-admin { grid-template-columns: 1fr; }
+    .foto-detalhes-solicitacao-admin { min-height: 210px; }
+  }
+  @media (max-width: 560px) {
+    .modal-informacao-cabecalho-mapro { padding: 18px 16px; }
+    .conteudo-informacao-cabecalho-mapro dl > div { grid-template-columns: 1fr; gap: 3px; }
+  }
+</style>

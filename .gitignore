@@ -1,0 +1,23 @@
+# Credenciais locais do CLASP (OAuth)
+.clasprc.json
+.clasprc.json.*
+
+# Variáveis de ambiente e segredos locais
+.env
+.env.*
+!.env.example
+credentials*.json
+service-account*.json
+service_account*.json
+secrets*.json
+token*.json
+*.pem
+*.key
+*.p12
+
+# Dependências e arquivos do sistema/editor
+node_modules/
+.DS_Store
+Thumbs.db
+*.swp
+*.swo

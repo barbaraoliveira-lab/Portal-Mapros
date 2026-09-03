@@ -1,0 +1,535 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <base target="_top">
+    <meta charset="utf-8">
+    <link rel="preload" as="image"
+      href="https://drive.google.com/thumbnail?id=1xu3olDb4OIgL2QzIKreygYr-J_oC3cv3&amp;sz=w4000"
+      fetchpriority="high">
+    <link rel="preload" as="image"
+      href="https://drive.google.com/thumbnail?id=1xu3olDb4OIgL2QzIKreygYr-J_oC3cv3&amp;sz=w1000"
+      fetchpriority="high">
+    <script id="dados-iniciais-mapro" type="application/json"><?!= dadosIniciaisJson ?></script>
+    <?!= incluir('Styles'); ?>
+    <?!= incluir('solicitacoesCabecalhoCSS'); ?>
+  </head>
+  <body>
+    <main id="pagina-solicitacoes-mapro" class="pagina-cadastro pagina-solicitacoes-mapro">
+      <header class="cabecalho-cadastro">
+        <div class="titulo-cadastro">
+          <img class="logo-cadastro" alt="Logo do SGI"
+            src="https://drive.google.com/thumbnail?id=1xu3olDb4OIgL2QzIKreygYr-J_oC3cv3&amp;sz=w4000"
+            width="42" height="42" loading="eager" fetchpriority="high">
+          <h1>SOLICITAÇÕES DE MAPRO</h1>
+        </div>
+        <button id="voltar-inicio" class="botao-icone botao-cabecalho" type="button"
+          aria-label="Voltar para a página inicial" title="Voltar para a página inicial">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M3 11.5 12 4l9 7.5M5.5 10v10h13V10M9.5 20v-6h5v6"/>
+          </svg>
+        </button>
+      </header>
+
+      <div class="barra-ferramentas" aria-label="Ações das solicitações">
+        <div id="acoes-participante" class="grupo-ferramentas" hidden>
+          <button id="nova-solicitacao" class="botao-icone" type="button"
+            aria-label="Solicitar nova Mapro" title="Solicitar nova Mapro">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v10M7 12h10"/></svg>
+          </button>
+          <button id="visualizar-solicitacao-participante" class="botao-icone" type="button" disabled
+            aria-label="Visualizar todos os dados da solicitação" title="Visualizar solicitação">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"/>
+              <circle cx="12" cy="12" r="2.7"/>
+            </svg>
+          </button>
+          <button id="editar-solicitacao" class="botao-icone" type="button"
+            aria-label="Editar solicitação selecionada" title="Editar solicitação selecionada">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4ZM13.5 6.5l4 4M12 4H5a1 1 0 0 0-1 1v7"/></svg>
+          </button>
+          <button id="excluir-solicitacao" class="botao-icone" type="button"
+            aria-label="Excluir solicitação selecionada" title="Excluir solicitação selecionada">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 14h10l1-14M10 11v6M14 11v6"/></svg>
+          </button>
+        </div>
+
+        <div id="acoes-admin" class="grupo-ferramentas" hidden>
+          <button id="visualizar-solicitacao-admin" class="botao-icone" type="button" disabled
+            aria-label="Visualizar todos os dados da solicitação" title="Visualizar solicitação">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"/>
+              <circle cx="12" cy="12" r="2.7"/>
+            </svg>
+          </button>
+          <button id="aprovar-solicitacao" class="botao-icone acao-aprovar" type="button"
+            aria-label="Aprovar solicitação selecionada" title="Aprovar solicitação selecionada">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m8 12 2.5 2.5L16.5 9"/></svg>
+          </button>
+          <button id="rejeitar-solicitacao" class="botao-icone acao-rejeitar" type="button"
+            aria-label="Rejeitar solicitação selecionada" title="Rejeitar solicitação selecionada">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m9 9 6 6M15 9l-6 6"/></svg>
+          </button>
+        </div>
+
+        <div class="grupo-ferramentas grupo-ferramentas-direita">
+          <button id="abrir-filtros" class="botao-icone" type="button"
+            aria-label="Aplicar filtros" title="Aplicar filtros">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h18l-7 8v6l-4 2v-8z"/></svg>
+          </button>
+          <button id="limpar-filtros" class="botao-icone" type="button"
+            aria-label="Apagar filtros" title="Apagar filtros">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 15 8-8 8 8-5 5H9zM15 20h6"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <section class="area-tabela" aria-label="Listagem de solicitações de Mapro">
+        <div id="carregando-solicitacoes" class="estado-tabela">Validando seu acesso...</div>
+        <div id="tabela-vazia" class="estado-tabela" hidden>
+          Nenhuma solicitação foi encontrada.
+        </div>
+        <div id="tabela-container" class="tabela-container" hidden>
+          <table class="tabela-usuarios tabela-solicitacoes">
+            <thead>
+              <tr>
+                <th scope="col">ID</th>
+                <th scope="col">SOLICITANTE</th>
+                <th scope="col">PORTFÓLIO</th>
+                <th scope="col">PROJETO</th>
+                <th scope="col">LÍDER</th>
+                <th scope="col">PARTICIPANTES INICIAIS</th>
+                <th scope="col">STATUS</th>
+                <th scope="col">MOTIVO DA REJEIÇÃO</th>
+                <th scope="col">CRIADO EM</th>
+                <th scope="col">ATUALIZADO EM</th>
+              </tr>
+            </thead>
+            <tbody id="corpo-tabela-solicitacoes"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <div id="modal-solicitacao" class="fundo-modal" hidden>
+      <section class="modal modal-cabecalho-solicitacao" role="dialog" aria-modal="true"
+        aria-labelledby="titulo-modal-solicitacao">
+        <button class="fechar-modal" type="button" data-fechar-modal="modal-solicitacao"
+          aria-label="Fechar">×</button>
+        <h2 id="titulo-modal-solicitacao">SOLICITAR MAPRO</h2>
+        <form id="formulario-solicitacao" class="formulario-cabecalho-solicitacao">
+          <input id="id-solicitacao" type="hidden">
+          <input id="id-usuario" type="hidden">
+          <ol class="indicador-etapas-solicitacao" aria-label="Progresso da solicitação">
+            <li data-indicador-etapa="1"><span>1</span><small>Identificação</small></li>
+            <li data-indicador-etapa="2"><span>2</span><small>Classificação</small></li>
+            <li data-indicador-etapa="3"><span>3</span><small>Plano do projeto</small></li>
+            <li data-indicador-etapa="4"><span>4</span><small>Complementos</small></li>
+          </ol>
+
+          <section class="etapa-solicitacao" data-etapa-solicitacao="1">
+            <div class="titulo-secao-solicitacao">
+              <span>IDENTIFICAÇÃO DO PROJETO</span>
+              <button class="botao-informacao-solicitacao" data-informacao-etapa="1"
+                type="button" aria-label="Informações da etapa de identificação" title="Como preencher">i</button>
+            </div>
+            <div class="grade-etapa-identificacao">
+              <div class="coluna-identificacao-projeto">
+                <div class="identificacao-principal-solicitacao">
+                  <label><b>ID DA MAPRO</b><input id="id-mapro-previa" readonly></label>
+                  <label><b>PORTFÓLIO</b><select id="portfolio" required><option value="">Selecione</option></select></label>
+                </div>
+                <label class="campo-nome-projeto-solicitacao"><b>NOME DO PROJETO</b>
+                  <input id="nome-projeto" type="text" maxlength="160" autocapitalize="characters"
+                    placeholder="Digite o nome do projeto" required></label>
+                <div class="campo-multiplo participantes-cabecalho-solicitacao">
+                  <span><b>PARTICIPANTES INICIAIS</b></span>
+                  <button id="alternar-participantes" class="controle-multiplo" type="button"
+                    aria-expanded="false">Selecione os participantes iniciais</button>
+                  <div id="opcoes-participantes" class="opcoes-multiplas" hidden>
+                    <input id="pesquisar-participantes" class="pesquisa-multipla" type="search"
+                      placeholder="Pesquisar participante inicial" autocomplete="off">
+                    <div id="lista-participantes"></div>
+                  </div>
+                </div>
+              </div>
+              <div class="painel-lider-solicitacao">
+                <div class="dados-lider-solicitacao">
+                  <div id="campo-lider" class="campo-pesquisavel campo-linha-solicitacao">
+                    <label for="lider-projeto-pesquisa"><b>LÍDER DO PROJETO</b></label>
+                    <input id="lider-projeto-pesquisa" type="search" autocomplete="off"
+                      placeholder="Pesquise e selecione o líder" role="combobox"
+                      aria-controls="opcoes-lideres" aria-expanded="false" required>
+                    <input id="lider-projeto" type="hidden">
+                    <div id="opcoes-lideres" class="opcoes-pesquisaveis" role="listbox" hidden></div>
+                  </div>
+                  <label><b>DEPARTAMENTO</b><input id="solicitacao-departamento" readonly
+                    placeholder="Automático"></label>
+                  <label><b>E-MAIL</b><input id="solicitacao-email-lider" type="email" readonly
+                    placeholder="Automático"></label>
+                </div>
+                <div class="foto-lider-solicitacao">
+                  <b>IMAGEM DO LÍDER</b>
+                  <button id="acionador-foto-lider-solicitacao" type="button"
+                    aria-label="Selecionar imagem do líder">
+                    <img id="foto-lider-solicitacao" alt="Imagem do líder" hidden>
+                    <span id="placeholder-foto-lider-solicitacao" aria-hidden="true">
+                      <svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM4 21a8 8 0 0 1 16 0"/></svg>
+                      <small>CLIQUE PARA SELECIONAR</small>
+                    </span>
+                  </button>
+                  <input id="arquivo-foto-lider-solicitacao" type="file"
+                    accept="image/jpeg,image/png,image/webp" hidden>
+                  <button id="remover-foto-lider-solicitacao" class="remover-foto-solicitacao"
+                    type="button" aria-label="Remover imagem do líder" title="Remover imagem" hidden>×</button>
+                </div>
+              </div>
+            </div>
+            <div class="acoes-modal acoes-etapa-solicitacao">
+              <button class="botao-modal botao-cancelar" type="button"
+                data-fechar-modal="modal-solicitacao">CANCELAR</button>
+              <button class="botao-modal botao-confirmar" data-avancar-etapa type="button">AVANÇAR</button>
+            </div>
+          </section>
+
+          <section class="etapa-solicitacao" data-etapa-solicitacao="2" hidden>
+            <div class="titulo-secao-solicitacao">
+              <span>CLASSIFICAÇÃO E ACOMPANHAMENTO</span>
+              <button class="botao-informacao-solicitacao" data-informacao-etapa="2"
+                type="button" aria-label="Informações da etapa de classificação" title="Como preencher">i</button>
+            </div>
+            <div class="grade-etapa-classificacao">
+              <label><b>NEGÓCIO</b><select id="solicitacao-negocio" required></select></label>
+              <label><b>DIMENSÃO BSC</b><select id="solicitacao-dimensao-bsc" required></select></label>
+              <label><b>OBJETIVO BSC</b><select id="solicitacao-objetivo-bsc" required></select></label>
+              <label><b>NÍVEL DO PROJETO</b><select id="solicitacao-nivel" required>
+                <option value="">Selecione</option><option>ESTRATÉGICO</option>
+                <option>TÁTICO</option><option>OPERACIONAL</option>
+              </select></label>
+              <label><b>CONTAGIRO DE ACOMPANHAMENTO</b>
+                <select id="solicitacao-contagiro" required></select></label>
+            </div>
+            <div class="acoes-modal acoes-etapa-solicitacao">
+              <button class="botao-modal botao-voltar-etapa" data-voltar-etapa type="button">VOLTAR</button>
+              <button class="botao-modal botao-confirmar" data-avancar-etapa type="button">AVANÇAR</button>
+            </div>
+          </section>
+
+          <section class="etapa-solicitacao" data-etapa-solicitacao="3" hidden>
+            <div class="titulo-secao-solicitacao">
+              <span>PLANO DO PROJETO</span>
+              <button class="botao-informacao-solicitacao" data-informacao-etapa="3"
+                type="button" aria-label="Informações da etapa do plano do projeto" title="Como preencher">i</button>
+            </div>
+            <div class="grade-plano-solicitacao">
+              <label><b>O QUE É O PROJETO</b><textarea id="solicitacao-o-que-e" minlength="3"
+                maxlength="3000" required placeholder="Descreva o projeto"></textarea></label>
+              <label><b>POR QUE</b><textarea id="solicitacao-porque" minlength="3"
+                maxlength="3000" required placeholder="Explique por que o projeto será realizado"></textarea></label>
+              <label class="resultados-solicitacao"><b>RESULTADOS ESPERADOS</b>
+                <textarea id="solicitacao-resultados" minlength="3" maxlength="3000" required
+                  placeholder="Informe as principais entregas esperadas"></textarea></label>
+            </div>
+            <div class="acoes-modal acoes-etapa-solicitacao">
+              <button class="botao-modal botao-voltar-etapa" data-voltar-etapa type="button">VOLTAR</button>
+              <button class="botao-modal botao-confirmar" data-avancar-etapa type="button">AVANÇAR</button>
+            </div>
+          </section>
+
+          <section class="etapa-solicitacao" data-etapa-solicitacao="4" hidden>
+            <div class="titulo-secao-solicitacao">
+              <span>INFORMAÇÕES COMPLEMENTARES</span>
+              <button class="botao-informacao-solicitacao" data-informacao-etapa="4"
+                type="button" aria-label="Informações da etapa complementar" title="Como preencher">i</button>
+            </div>
+            <div class="grade-complementos-solicitacao">
+              <fieldset class="pergunta-complementar-solicitacao">
+                <legend>O projeto já possui indicadores definidos?</legend>
+                <div class="opcoes-binarias-solicitacao">
+                  <label><input type="radio" name="possui-indicadores-solicitacao" value="SIM" required><span>Sim</span></label>
+                  <label><input type="radio" name="possui-indicadores-solicitacao" value="NÃO" required><span>Não</span></label>
+                </div>
+                <label id="campo-indicadores-solicitacao" class="campo-condicional-solicitacao" hidden>
+                  <b>INDICADORES DO PROJETO</b>
+                  <textarea id="solicitacao-indicadores" minlength="3" maxlength="3000"
+                    placeholder="Informe as métricas utilizadas para medir o desempenho do projeto."></textarea>
+                </label>
+              </fieldset>
+              <fieldset class="pergunta-complementar-solicitacao">
+                <legend>É um processo crítico?</legend>
+                <div class="opcoes-binarias-solicitacao">
+                  <label><input type="radio" name="processo-critico-solicitacao" value="SIM" required><span>Sim</span></label>
+                  <label><input type="radio" name="processo-critico-solicitacao" value="NÃO" required><span>Não</span></label>
+                </div>
+              </fieldset>
+              <fieldset class="pergunta-complementar-solicitacao">
+                <legend>O projeto envolverá algum sistema?</legend>
+                <div class="opcoes-binarias-solicitacao">
+                  <label><input type="radio" name="envolve-sistema-solicitacao" value="SIM" required><span>Sim</span></label>
+                  <label><input type="radio" name="envolve-sistema-solicitacao" value="NÃO" required><span>Não</span></label>
+                </div>
+                <label id="campo-sistemas-solicitacao" class="campo-condicional-solicitacao" hidden>
+                  <b>QUAL/QUAIS SISTEMAS?</b>
+                  <textarea id="solicitacao-sistemas" minlength="3" maxlength="3000"
+                    placeholder="Informe o nome do sistema ou dos sistemas envolvidos."></textarea>
+                </label>
+              </fieldset>
+            </div>
+            <div class="acoes-modal acoes-etapa-solicitacao">
+              <button class="botao-modal botao-voltar-etapa" data-voltar-etapa type="button">VOLTAR</button>
+              <button id="salvar-solicitacao" class="botao-modal botao-confirmar" type="submit">
+                SOLICITAR
+              </button>
+            </div>
+          </section>
+        </form>
+      </section>
+    </div>
+
+    <div id="modal-detalhes-solicitacao-admin" class="fundo-modal" hidden>
+      <section class="modal modal-detalhes-solicitacao-admin" role="dialog" aria-modal="true"
+        aria-labelledby="titulo-detalhes-solicitacao-admin">
+        <button class="fechar-modal" type="button"
+          data-fechar-modal="modal-detalhes-solicitacao-admin" aria-label="Fechar">×</button>
+        <h2 id="titulo-detalhes-solicitacao-admin">DETALHES DA SOLICITAÇÃO</h2>
+        <div class="grade-detalhes-solicitacao-admin">
+          <section>
+            <h3>IDENTIFICAÇÃO E SOLICITANTE</h3>
+            <dl>
+              <div><dt>ID da solicitação/MAPRO</dt><dd data-detalhe-solicitacao="idSolicitacao"></dd></div>
+              <div><dt>ID do usuário</dt><dd data-detalhe-solicitacao="idUsuario"></dd></div>
+              <div><dt>Solicitante</dt><dd data-detalhe-solicitacao="nome"></dd></div>
+              <div><dt>E-mail do solicitante</dt><dd data-detalhe-solicitacao="emailUsuario"></dd></div>
+              <div><dt>Portfólio</dt><dd data-detalhe-solicitacao="portfolio"></dd></div>
+              <div><dt>Nome do projeto</dt><dd data-detalhe-solicitacao="nomeProjeto"></dd></div>
+              <div class="detalhe-largura-total"><dt>Participantes iniciais</dt>
+                <dd data-detalhe-solicitacao="participantes"></dd></div>
+            </dl>
+          </section>
+          <section class="secao-lider-detalhes-admin">
+            <h3>LÍDER DO PROJETO</h3>
+            <div class="conteudo-lider-detalhes-admin">
+              <dl>
+                <div><dt>ID do líder</dt><dd data-detalhe-solicitacao="idLider"></dd></div>
+                <div><dt>Nome</dt><dd data-detalhe-solicitacao="liderProjeto"></dd></div>
+                <div><dt>Departamento</dt><dd data-detalhe-solicitacao="departamento"></dd></div>
+                <div><dt>E-mail</dt><dd data-detalhe-solicitacao="emailLider"></dd></div>
+              </dl>
+              <figure class="foto-detalhes-solicitacao-admin">
+                <img id="foto-detalhes-solicitacao-admin" alt="Imagem do líder" hidden>
+                <span id="placeholder-foto-detalhes-admin">SEM IMAGEM</span>
+              </figure>
+            </div>
+          </section>
+          <section class="secao-classificacao-detalhes-admin">
+            <h3>CLASSIFICAÇÃO E ACOMPANHAMENTO</h3>
+            <dl>
+              <div><dt>Negócio</dt><dd data-detalhe-solicitacao="negocio"></dd></div>
+              <div><dt>Dimensão BSC</dt><dd data-detalhe-solicitacao="dimensaoBsc"></dd></div>
+              <div class="detalhe-largura-total"><dt>Objetivo BSC</dt>
+                <dd data-detalhe-solicitacao="objetivoBsc"></dd></div>
+              <div><dt>Nível</dt><dd data-detalhe-solicitacao="nivel"></dd></div>
+              <div><dt>Contagiro</dt><dd data-detalhe-solicitacao="contagiro"></dd></div>
+            </dl>
+            <div class="subsecao-complementar-detalhes-solicitacao">
+              <h4>INFORMAÇÕES COMPLEMENTARES</h4>
+              <dl>
+                <div><dt>Processo crítico?</dt>
+                  <dd data-detalhe-solicitacao="processoCritico"></dd></div>
+                <div><dt>Envolve sistema?</dt>
+                  <dd data-detalhe-solicitacao="envolveSistema"></dd></div>
+                <div class="detalhe-largura-total"><dt>Sistema(s) envolvido(s)</dt>
+                  <dd data-detalhe-solicitacao="sistemasEnvolvidos"></dd></div>
+              </dl>
+            </div>
+          </section>
+          <section>
+            <h3>PLANO DO PROJETO</h3>
+            <dl class="detalhes-plano-admin">
+              <div><dt>O que é o projeto</dt><dd data-detalhe-solicitacao="oQueE"></dd></div>
+              <div><dt>Por que</dt><dd data-detalhe-solicitacao="porque"></dd></div>
+              <div><dt>Resultados esperados</dt>
+                <dd data-detalhe-solicitacao="resultadosEsperados"></dd></div>
+              <div><dt>Indicadores definidos?</dt>
+                <dd data-detalhe-solicitacao="possuiIndicadoresDefinidos"></dd></div>
+              <div><dt>Indicadores do projeto</dt>
+                <dd data-detalhe-solicitacao="indicadores"></dd></div>
+            </dl>
+          </section>
+          <section class="secao-tramitacao-detalhes-admin">
+            <h3>TRAMITAÇÃO</h3>
+            <dl>
+              <div><dt>Status</dt><dd data-detalhe-solicitacao="status"></dd></div>
+              <div><dt>Criado em</dt><dd data-detalhe-solicitacao="criadoEm"></dd></div>
+              <div><dt>Atualizado em</dt><dd data-detalhe-solicitacao="atualizadoEm"></dd></div>
+              <div><dt>Motivo da rejeição</dt>
+                <dd data-detalhe-solicitacao="motivoRejeicao"></dd></div>
+            </dl>
+          </section>
+        </div>
+        <div class="acoes-modal">
+          <button class="botao-modal botao-confirmar" type="button"
+            data-fechar-modal="modal-detalhes-solicitacao-admin">FECHAR</button>
+        </div>
+      </section>
+    </div>
+
+    <div id="modal-informacao-cabecalho-solicitacao" class="fundo-modal" hidden>
+      <section class="modal modal-informacao-cabecalho-mapro" role="dialog" aria-modal="true"
+        aria-labelledby="titulo-informacao-solicitacao">
+        <button class="fechar-modal" type="button"
+          data-fechar-modal="modal-informacao-cabecalho-solicitacao" aria-label="Fechar">×</button>
+        <h2 id="titulo-informacao-solicitacao">COMO PREENCHER O CABEÇALHO</h2>
+        <p class="introducao-informacao-cabecalho-mapro">
+          Use as orientações abaixo para manter a identificação e o planejamento da MAPRO consistentes.
+          As informações serão levadas automaticamente para a MAPRO após a aprovação.
+        </p>
+        <div class="conteudo-informacao-cabecalho-mapro">
+          <section data-conteudo-informacao-etapa="1">
+            <h3>IDENTIFICAÇÃO E DADOS GERAIS</h3>
+            <dl>
+              <div><dt>ID da MAPRO</dt><dd>Exibe o próximo número da solicitação, que será reutilizado como ID da MAPRO após a aprovação.</dd></div>
+              <div><dt>Portfólio</dt><dd>Selecione o portfólio ao qual o projeto pertence.</dd></div>
+              <div><dt>Nome do projeto</dt><dd>Informe um nome objetivo que identifique claramente o projeto.</dd></div>
+              <div><dt>Líder do projeto</dt><dd>Selecione o usuário responsável pela liderança da MAPRO.</dd></div>
+              <div><dt>Departamento e e-mail</dt><dd>Preenchidos automaticamente conforme o cadastro do líder.</dd></div>
+              <div><dt>Participantes iniciais</dt><dd>Selecione os usuários que participarão da MAPRO desde a aprovação da solicitação.</dd></div>
+              <div><dt>Imagem do líder</dt><dd>Clique na área da imagem para incluir a foto que será compartilhada na MAPRO.</dd></div>
+            </dl>
+          </section>
+          <section data-conteudo-informacao-etapa="2" hidden>
+            <h3>CLASSIFICAÇÃO E ACOMPANHAMENTO</h3>
+            <dl>
+              <div><dt>Negócio</dt><dd>Selecione a área de atuação à qual o projeto está ligado.
+                <strong>Opções: Linhas, Fretamento e Turismo e Encomendas.</strong></dd></div>
+              <div><dt>Dimensão BSC</dt><dd>Corresponde à perspectiva estratégica do BSC à qual o projeto está alinhado. Está ligada a quatro dimensões:
+                <ul class="lista-detalhes-informacao-mapro lista-dimensoes-bsc-mapro">
+                  <li><strong>Financeiro</strong> — relacionada a resultados econômicos.</li>
+                  <li><strong>Mercado</strong> — voltada à satisfação e fidelização do cliente.</li>
+                  <li><strong>Aprendizado e inovação <span class="detalhe-negocio-dimensao-mapro">(fretamento, turismo e encomendas)</span> / Aprendizado e crescimento <span class="detalhe-negocio-dimensao-mapro">(linhas)</span></strong> — foca no desenvolvimento de pessoas e inovação.</li>
+                  <li><strong>Processos Internos</strong> — ligada à eficiência e qualidade.</li>
+                </ul>
+              </dd></div>
+              <div><dt>Objetivo BSC</dt><dd>Este campo se relaciona com a Dimensão BSC escolhida e deve ser preenchido com o objetivo estratégico específico para o qual o projeto contribui dentro da dimensão selecionada.</dd></div>
+              <div><dt>Nível do projeto</dt><dd>Classifique o projeto conforme o alcance e a natureza da iniciativa:
+                <ul class="lista-detalhes-informacao-mapro">
+                  <li><strong>Estratégico:</strong> impacta toda a organização e envolve a alta liderança.</li>
+                  <li><strong>Tático:</strong> direcionado a um setor específico, com relevância para os objetivos organizacionais.</li>
+                  <li><strong>Operacional:</strong> focado na execução de atividades do dia a dia, com impacto direto na eficiência e na qualidade dos processos organizacionais.</li>
+                </ul>
+              </dd></div>
+              <div><dt>Contagiro</dt><dd>Selecione a Contagiro designada para o acompanhamento do projeto.</dd></div>
+            </dl>
+          </section>
+          <section data-conteudo-informacao-etapa="3" hidden>
+            <h3>PLANO DO PROJETO</h3>
+            <dl>
+              <div><dt>O que é o projeto</dt><dd>Descreva o escopo e o que será realizado.</dd></div>
+              <div><dt>Por que</dt><dd>Explique o problema, a necessidade ou a oportunidade que justifica o projeto.</dd></div>
+              <div><dt>Resultados esperados</dt><dd>São as principais entregas que o projeto deve gerar, ou seja, o que será melhorado ou modificado quando finalizado. Liste os resultados de forma clara, preferencialmente de forma mensurável. <strong>Exemplo: “Redução de 30% no tempo de resposta ao cliente em até 3 meses após a implantação”.</strong></dd></div>
+            </dl>
+          </section>
+          <section data-conteudo-informacao-etapa="4" hidden>
+            <h3>INFORMAÇÕES COMPLEMENTARES</h3>
+            <dl>
+              <div><dt>Indicadores definidos</dt><dd>Marque Sim quando o projeto já possuir indicadores e informe as métricas. Ao marcar Não, o campo poderá ser preenchido posteriormente na MAPRO.</dd></div>
+              <div><dt>Processo crítico</dt><dd>Informe se o projeto está relacionado a um processo considerado crítico para a operação.</dd></div>
+              <div><dt>Envolvimento de sistema</dt><dd>Marque Sim quando o projeto envolver algum sistema e informe qual ou quais sistemas serão impactados.</dd></div>
+            </dl>
+          </section>
+        </div>
+        <div class="acoes-modal"><button class="botao-modal botao-confirmar" type="button"
+          data-fechar-modal="modal-informacao-cabecalho-solicitacao">ENTENDI</button></div>
+      </section>
+    </div>
+
+    <div id="modal-filtros-mapro" class="fundo-modal" hidden>
+      <section class="modal modal-grande" role="dialog" aria-modal="true"
+        aria-labelledby="titulo-filtros-mapro">
+        <button class="fechar-modal" type="button" data-fechar-modal="modal-filtros-mapro"
+          aria-label="Fechar">×</button>
+        <h2 id="titulo-filtros-mapro">PESQUISA</h2>
+        <form id="formulario-filtros-mapro" class="formulario-grid">
+          <div class="campo-pesquisavel campo-filtro-solicitacao">
+            <label for="filtro-id">ID da solicitação</label>
+            <input id="filtro-id" type="text" inputmode="numeric" autocomplete="off"
+              placeholder="Todos" role="combobox" aria-expanded="false"
+              aria-controls="opcoes-filtro-solicitacao-id">
+            <div id="opcoes-filtro-solicitacao-id" class="opcoes-pesquisaveis"
+              role="listbox" hidden></div>
+          </div>
+          <div class="campo-pesquisavel campo-filtro-solicitacao">
+            <label for="filtro-projeto">Nome do projeto</label>
+            <input id="filtro-projeto" type="text" autocomplete="off" placeholder="Todos"
+              role="combobox" aria-expanded="false"
+              aria-controls="opcoes-filtro-solicitacao-projeto">
+            <div id="opcoes-filtro-solicitacao-projeto" class="opcoes-pesquisaveis"
+              role="listbox" hidden></div>
+          </div>
+          <label>
+            Data de criação
+            <input id="filtro-data-criacao" type="date">
+          </label>
+          <label>
+            Portfólio
+            <select id="filtro-portfolio"><option value="">Todos</option></select>
+          </label>
+          <label>
+            Status
+            <select id="filtro-status">
+              <option value="TODOS">Todos</option>
+              <option value="PENDENTE">Pendente</option>
+              <option value="APROVADA">Aprovada</option>
+              <option value="REJEITADA">Rejeitada</option>
+            </select>
+          </label>
+          <div class="acoes-modal formulario-largura-total">
+            <button class="botao-modal botao-cancelar" type="button"
+              data-fechar-modal="modal-filtros-mapro">CANCELAR</button>
+            <button class="botao-modal botao-confirmar" type="submit">PESQUISAR</button>
+          </div>
+        </form>
+      </section>
+    </div>
+
+    <div id="modal-rejeicao-mapro" class="fundo-modal" hidden>
+      <section class="modal modal-confirmacao" role="dialog" aria-modal="true"
+        aria-labelledby="titulo-rejeicao-mapro">
+        <button class="fechar-modal" type="button" data-fechar-modal="modal-rejeicao-mapro"
+          aria-label="Fechar">×</button>
+        <h2 id="titulo-rejeicao-mapro">REJEITAR SOLICITAÇÃO</h2>
+        <form id="formulario-rejeicao-mapro" class="formulario-rejeicao">
+          <p id="texto-rejeicao-mapro" class="texto-confirmacao"></p>
+          <label for="motivo-rejeicao">Motivo da rejeição</label>
+          <textarea id="motivo-rejeicao" minlength="5" maxlength="1000" rows="6"
+            placeholder="Explique o motivo da rejeição" required></textarea>
+          <div class="acoes-modal">
+            <button class="botao-modal botao-cancelar" type="button"
+              data-fechar-modal="modal-rejeicao-mapro">CANCELAR</button>
+            <button id="confirmar-rejeicao-mapro" class="botao-modal botao-rejeitar"
+              type="submit">REJEITAR</button>
+          </div>
+        </form>
+      </section>
+    </div>
+
+    <div id="modal-confirmacao-mapro" class="fundo-modal" hidden>
+      <section class="modal modal-confirmacao modal-confirmacao-acao" role="dialog" aria-modal="true"
+        aria-labelledby="titulo-confirmacao-mapro">
+        <h2 id="titulo-confirmacao-mapro"></h2>
+        <p id="texto-confirmacao-mapro" class="texto-confirmacao"></p>
+        <div class="acoes-modal">
+          <button class="botao-modal botao-nao" type="button"
+            data-fechar-modal="modal-confirmacao-mapro">NÃO</button>
+          <button id="confirmar-acao-mapro" class="botao-modal botao-confirmar" type="button">
+            SIM
+          </button>
+        </div>
+      </section>
+    </div>
+
+    <?!= incluir('Carregamento'); ?>
+    <div id="aviso" class="aviso" role="status" hidden></div>
+    <?!= incluir('ComponentesJS'); ?>
+    <?!= incluir('solicitacoesDeMaproJS'); ?>
+  </body>
+</html>

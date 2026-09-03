@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <base target="_top">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <script id="dados-iniciais-mapro" type="application/json"><?!= dadosIniciaisJson ?></script>
+    <?!= incluir('Styles'); ?>
+    <?!= incluir('DashboardCSS'); ?>
+  </head>
+  <body>
+    <main class="pagina-cadastro pagina-dashboard">
+      <header class="cabecalho-cadastro">
+        <div class="titulo-cadastro">
+          <img id="logo-dashboard" class="logo-cadastro" alt="Logo do SGI" width="42" height="42">
+          <div><h1>DASHBOARD</h1><p id="escopo-dashboard">Carregando informações...</p></div>
+        </div>
+        <button id="voltar-dashboard" class="botao-icone botao-cabecalho" type="button" aria-label="Voltar ao início" title="Voltar ao início">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 5-7 7 7 7M8 12h12"/></svg>
+        </button>
+      </header>
+
+      <section class="barra-abas-dashboard" aria-label="Visões do dashboard">
+        <button class="aba-dashboard ativa" type="button" data-aba="geral" aria-selected="true">VISÃO GERAL</button>
+        <button class="aba-dashboard" type="button" data-aba="atrasos" aria-selected="false">ATIVIDADES EM ATRASO <span id="contador-atrasos">0</span></button>
+      </section>
+
+      <section class="filtros-dashboard" aria-label="Filtros do dashboard">
+        <label>Contagiro<select id="filtro-contagiro"><option value="">Todas</option></select></label>
+        <label>Início de<input id="filtro-inicio-de" type="date"></label>
+        <label>Início até<input id="filtro-inicio-ate" type="date"></label>
+        <label>Prazo de<input id="filtro-prazo-de" type="date"></label>
+        <label>Prazo até<input id="filtro-prazo-ate" type="date"></label>
+        <label>Status<select id="filtro-status"><option value="">Todos</option></select></label>
+        <label>Área<select id="filtro-area"><option value="">Todas</option></select></label>
+        <label>Mapro<input id="filtro-mapro" type="search" placeholder="ID ou nome"></label>
+        <label>Portfólio<select id="filtro-portfolio"><option value="">Todos</option></select></label>
+        <button id="limpar-filtros-dashboard" type="button">LIMPAR</button>
+      </section>
+
+      <div id="estado-dashboard" class="estado-tabela">Carregando dashboard...</div>
+      <div id="layout-dashboard" class="layout-dashboard" hidden>
+        <aside class="painel-portfolios-dashboard">
+          <div class="cabecalho-portfolios-dashboard">
+            <h2>PORTFÓLIOS</h2>
+            <button id="alternar-portfolios-dashboard" type="button" aria-label="Recolher menu de portfólios" aria-expanded="true">‹</button>
+          </div>
+          <nav id="menu-portfolios-dashboard" class="menu-portfolios-dashboard"></nav>
+        </aside>
+
+        <section class="conteudo-dashboard">
+          <div id="aba-geral-dashboard">
+            <section id="indicadores-dashboard" class="grade-indicadores-dashboard" aria-label="Indicadores"></section>
+            <section id="detalhes-indicador-dashboard" class="detalhes-indicador-dashboard" hidden
+              aria-labelledby="titulo-detalhes-indicador-dashboard">
+              <div class="cabecalho-detalhes-indicador-dashboard">
+                <div>
+                  <span>DETALHES DO INDICADOR</span>
+                  <h2 id="titulo-detalhes-indicador-dashboard"></h2>
+                </div>
+                <button id="fechar-detalhes-indicador-dashboard" type="button"
+                  aria-label="Fechar lista do indicador" title="Fechar">&times;</button>
+              </div>
+              <div id="estado-detalhes-indicador-dashboard" class="estado-tabela"></div>
+              <div id="tabela-detalhes-indicador-container" class="tabela-container" hidden>
+                <table class="tabela-usuarios tabela-detalhes-indicador-dashboard">
+                  <thead><tr>
+                    <th>MAPRO</th><th>PROJETO</th><th>PORTFÓLIO</th><th>LÍDER</th>
+                    <th>CONTAGIRO</th><th>ACOMPANHAMENTO INICIADO EM</th><th>PRAZO</th>
+                    <th>STATUS</th><th>CONCLUSÃO</th><th>MOTIVO DO CANCELAMENTO</th>
+                  </tr></thead>
+                  <tbody id="corpo-detalhes-indicador-dashboard"></tbody>
+                </table>
+              </div>
+            </section>
+            <section id="tags-conclusao-dashboard" class="tags-conclusao-dashboard" aria-label="Faixas de conclusão"></section>
+            <section class="grade-graficos-dashboard">
+              <article class="cartao-grafico-dashboard">
+                <div class="titulo-grafico-dashboard"><span>PORTFÓLIO DE PROJETOS</span><h2>% CONCLUSÃO</h2></div>
+                <div class="area-rosca-dashboard"><canvas id="grafico-conclusao" width="360" height="260" aria-label="Distribuição por percentual de conclusão"></canvas><div id="legenda-conclusao" class="legenda-grafico-dashboard"></div></div>
+              </article>
+              <article class="cartao-grafico-dashboard">
+                <div class="titulo-grafico-dashboard"><span>VISÃO OPERACIONAL</span><h2>MAPROS POR STATUS</h2></div>
+                <div id="grafico-status" class="grafico-barras-dashboard"></div>
+              </article>
+              <article class="cartao-grafico-dashboard grafico-amplo-dashboard">
+                <div class="titulo-grafico-dashboard"><span>DISTRIBUIÇÃO</span><h2>MAPROS POR PORTFÓLIO</h2></div>
+                <div id="grafico-portfolios" class="grafico-barras-dashboard horizontal"></div>
+              </article>
+            </section>
+          </div>
+
+          <div id="aba-atrasos-dashboard" hidden>
+            <div id="estado-atrasos-dashboard" class="estado-tabela"></div>
+            <div id="tabela-atrasos-container" class="tabela-container" hidden>
+              <table class="tabela-usuarios tabela-atrasos-dashboard">
+                <thead><tr><th>MAPRO</th><th>PROJETO</th><th>PORTFÓLIO</th><th>ATIVIDADE</th><th>RESPONSÁVEL</th><th>PRAZO</th><th>DIAS EM ATRASO</th></tr></thead>
+                <tbody id="corpo-atrasos-dashboard"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+      </div>
+      <footer class="rodape-dashboard"><span>MAPRO · Gestão de Projetos</span><img id="logo-empresa-dashboard" alt="Logo da empresa"></footer>
+    </main>
+    <?!= incluir('Carregamento'); ?>
+    <div id="aviso" class="aviso" role="status" hidden></div>
+    <?!= incluir('ComponentesJS'); ?>
+    <?!= incluir('DashboardJS'); ?>
+  </body>
+</html>

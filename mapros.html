@@ -1,0 +1,635 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <base target="_top">
+    <meta charset="utf-8">
+    <link rel="preload" as="image"
+      href="https://drive.google.com/thumbnail?id=1xu3olDb4OIgL2QzIKreygYr-J_oC3cv3&amp;sz=w4000"
+      fetchpriority="high">
+    <link rel="preload" as="image"
+      href="https://drive.google.com/thumbnail?id=1xu3olDb4OIgL2QzIKreygYr-J_oC3cv3&amp;sz=w1000"
+      fetchpriority="high">
+    <script id="dados-iniciais-mapro" type="application/json"><?!= dadosIniciaisJson ?></script>
+    <?!= incluir('Styles'); ?>
+    <?!= incluir('maprosCSS'); ?>
+  </head>
+  <body>
+    <main class="pagina-cadastro pagina-mapros">
+      <header class="cabecalho-cadastro">
+        <div class="titulo-cadastro">
+          <img class="logo-cadastro" alt="Logo do SGI"
+            src="https://drive.google.com/thumbnail?id=1xu3olDb4OIgL2QzIKreygYr-J_oC3cv3&amp;sz=w4000"
+            width="42" height="42" loading="eager" fetchpriority="high">
+          <h1 id="titulo-pagina-mapros">MAPROS</h1>
+        </div>
+        <button id="voltar-inicio-mapros" class="botao-icone botao-cabecalho" type="button"
+          aria-label="Voltar para a página inicial" title="Voltar para a página inicial">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M3 11.5 12 4l9 7.5M5.5 10v10h13V10M9.5 20v-6h5v6"/>
+          </svg>
+        </button>
+      </header>
+
+      <section id="etapa-lista-mapros" class="etapa-mapros">
+        <div class="barra-ferramentas barra-lista-mapros">
+          <div class="grupo-ferramentas">
+            <button id="abrir-mapro" class="botao-abrir-mapro" type="button" disabled>
+              ABRIR MAPRO
+            </button>
+          </div>
+          <div class="grupo-ferramentas grupo-ferramentas-direita">
+            <button id="verificar-inatividade" class="botao-icone acao-verificar" type="button" hidden
+              aria-label="Verificar inatividade das Mapros" title="Verificar inatividade das Mapros">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2M5 4l2 2M19 4l-2 2"/></svg>
+            </button>
+            <button id="abrir-pesquisa-mapros" class="botao-icone" type="button"
+              aria-label="Pesquisar Mapros" title="Pesquisar Mapros">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h18l-7 8v6l-4 2v-8z"/></svg>
+            </button>
+            <button id="limpar-pesquisa-mapros" class="botao-icone" type="button"
+              aria-label="Apagar filtros da pesquisa" title="Apagar filtros da pesquisa">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 15 8-8 8 8-5 5H9zM15 20h6"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <div id="layout-lista-mapros" class="layout-lista-mapros">
+          <aside id="painel-portfolios" class="painel-portfolios" aria-label="Portfólios">
+            <div class="cabecalho-portfolios">
+              <h2>PORTFÓLIOS</h2>
+              <button id="alternar-painel-portfolios" class="botao-alternar-portfolios" type="button"
+                aria-expanded="true" aria-controls="menu-portfolios"
+                aria-label="Recolher menu de portfólios" title="Recolher menu de portfólios">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14 6-6 6 6 6"/></svg>
+              </button>
+            </div>
+            <nav id="menu-portfolios" class="menu-portfolios"></nav>
+          </aside>
+          <section class="conteudo-lista-mapros">
+            <div id="estado-mapros" class="estado-tabela">Validando seu acesso...</div>
+            <div id="tabela-mapros-container" class="tabela-container tabela-mapros-container" hidden>
+              <table class="tabela-usuarios tabela-mapros">
+                <thead>
+                  <tr>
+                    <th scope="col">ID</th>
+                    <th scope="col">STATUS</th>
+                    <th scope="col">CONTAGIRO</th>
+                    <th scope="col">NOME DO PROJETO</th>
+                    <th scope="col">DATA DE INÍCIO</th>
+                    <th scope="col">DATA FINAL</th>
+                    <th scope="col">CONCLUSÃO</th>
+                    <th scope="col">SITUAÇÃO</th>
+                  </tr>
+                </thead>
+                <tbody id="corpo-tabela-mapros"></tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <section id="etapa-detalhe-mapro" class="etapa-mapros detalhe-mapro" hidden>
+        <div class="barra-ferramentas barra-detalhe-mapro">
+          <div class="grupo-ferramentas">
+            <button id="voltar-lista-mapros" class="botao-icone" type="button"
+              aria-label="Voltar para a lista" title="Voltar para a lista">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 5-7 7 7 7M8 12h12"/></svg>
+            </button>
+            <button id="adicionar-participantes-mapro" class="botao-icone" type="button" hidden
+              aria-label="Adicionar participantes" title="Adicionar participantes">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 20v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 10a4 4 0 1 0 0-8M19 8v6M16 11h6"/></svg>
+            </button>
+            <button id="imprimir-pdf-mapro" class="botao-icone acao-pdf-mapro" type="button"
+              aria-label="Baixar o projeto em PDF" title="Baixar PDF">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M6 2h8l4 4v16H6zM14 2v5h5"/>
+                <text x="5.5" y="17.2">PDF</text>
+              </svg>
+            </button>
+          </div>
+          <section id="resumo-executivo-mapro" class="resumo-executivo-mapro" aria-label="Resumo do projeto">
+            <div class="card-progresso-mapro">
+              <span>CONCLUSÃO</span>
+              <div class="barra-progresso" aria-label="Percentual de conclusão">
+                <span id="progresso-detalhe-mapro"></span>
+                <strong id="percentual-detalhe-mapro">0%</strong>
+              </div>
+            </div>
+            <div class="card-indicador-mapro card-status-mapro">
+              <span>STATUS</span><strong id="situacao-detalhe-mapro">—</strong>
+            </div>
+            <div class="card-indicador-mapro"><span>SEMANA ATUAL</span><strong id="semana-atual-mapro">—</strong></div>
+            <div class="card-indicador-mapro" title="Soma de tópicos, atividades e subatividades"><span>TOTAL DE ITENS NA MAPRO</span><strong id="total-atividades-mapro">0</strong></div>
+            <div class="card-indicador-mapro"><span>ATIVIDADES CONCLUÍDAS</span><strong id="atividades-concluidas-mapro">0</strong></div>
+            <div class="card-indicador-mapro"><span>ATIVIDADES EM ATRASO</span><strong id="atividades-atrasadas-mapro">0</strong></div>
+            <div class="card-indicador-mapro"><span>NÃO APLICÁVEIS</span><strong id="atividades-nao-aplicaveis-mapro">0</strong></div>
+          </section>
+        </div>
+
+        <div id="carregando-detalhe-mapro" class="estado-tabela" hidden>Carregando projeto...</div>
+        <div id="conteudo-detalhe-mapro" class="conteudo-detalhe-mapro" hidden>
+          <section id="cartao-cabecalho-mapro" class="cartao-mapros cartao-cabecalho-mapro">
+            <form id="formulario-cabecalho-mapro" class="matriz-cabecalho-mapro">
+              <input id="mapro-id" type="hidden">
+              <input id="mapro-version" type="hidden">
+
+              <section class="bloco-matriz bloco-identificacao-mapro" aria-labelledby="titulo-identificacao-mapro">
+                <div class="cabecalho-titulo-identificacao-mapro">
+                  <h2 id="titulo-identificacao-mapro" class="titulo-bloco-matriz">IDENTIFICAÇÃO DO PROJETO</h2>
+                  <button id="informacao-cabecalho-mapro" class="botao-informacao-cabecalho-mapro"
+                    type="button" aria-label="Informações sobre o preenchimento do cabeçalho"
+                    title="Como preencher o cabeçalho">i</button>
+                </div>
+
+                <div class="linha-principal-mapro">
+                  <div class="campo-matriz campo-identificacao">
+                    <span class="rotulo-matriz">ID DA MAPRO</span>
+                    <output id="id-visivel-mapro">—</output>
+                  </div>
+                  <div class="campo-matriz campo-identificacao campo-portfolio">
+                    <span class="rotulo-matriz">PORTFÓLIO</span>
+                    <output id="portfolio-detalhe-mapro">—</output>
+                  </div>
+                  <label class="campo-matriz campo-nome-projeto">
+                    <span class="rotulo-matriz">NOME DO PROJETO</span>
+                    <input id="mapro-nome" class="entrada-titulo-projeto" type="text" maxlength="160"
+                      autocapitalize="characters" required>
+                  </label>
+                </div>
+
+                <div class="grade-resumo-mapro">
+                  <div class="area-dados-gerais">
+                    <label class="linha-matriz linha-contagiro">
+                      <span class="rotulo-lateral">CONTAGIRO</span>
+                      <select id="mapro-contagiro"><option value="">Selecione</option></select>
+                    </label>
+                    <label class="linha-matriz">
+                      <span class="rotulo-lateral">NÍVEL</span>
+                      <select id="mapro-nivel">
+                        <option value="">Selecione</option>
+                        <option value="ESTRATÉGICO">Estratégico</option>
+                        <option value="TÁTICO">Tático</option>
+                        <option value="OPERACIONAL">Operacional</option>
+                      </select>
+                    </label>
+                    <div class="linha-matriz linha-prazos">
+                      <label><span class="rotulo-lateral">INÍCIO</span><input id="mapro-data-inicio" type="date" readonly
+                        aria-label="Data automática da primeira atividade" title="Preenchido automaticamente pela primeira atividade"></label>
+                      <label><span class="rotulo-lateral">PRAZO FINAL</span><input id="mapro-data-final" type="date" readonly
+                        aria-label="Data automática da última atividade" title="Preenchido automaticamente pela última atividade"></label>
+                      <div class="campo-semana"><span class="rotulo-lateral rotulo-semana">SEMANA</span><output id="mapro-semana-final">—</output>
+                        <button id="historico-prazo-projeto-mapro" class="botao-historico-prazo-projeto" type="button"
+                          aria-label="Ver histórico do prazo final do projeto" title="Histórico do prazo final">↺</button>
+                      </div>
+                    </div>
+                    <label class="linha-matriz">
+                      <span class="rotulo-lateral">LÍDER DO PROJETO</span>
+                      <select id="mapro-lider"><option value="">Selecione</option></select>
+                    </label>
+                    <label class="linha-matriz">
+                      <span class="rotulo-lateral">DEPARTAMENTO</span>
+                      <select id="mapro-departamento"><option value="">Selecione</option></select>
+                    </label>
+                    <label class="linha-matriz">
+                      <span class="rotulo-lateral">E-MAIL</span>
+                      <input id="mapro-email-lider" type="email" maxlength="254" readonly
+                        aria-label="E-mail automático do líder"
+                        title="Preenchido automaticamente pelo cadastro do líder">
+                    </label>
+                  </div>
+
+                  <div class="painel-estrategia-imagem">
+                    <div class="area-estrategia">
+                      <label class="campo-matriz"><span class="rotulo-matriz">NEGÓCIO</span><select id="mapro-negocio"><option value="">Selecione</option></select></label>
+                      <label class="campo-matriz"><span class="rotulo-matriz">DIMENSÃO BSC</span><select id="mapro-dimensao"><option value="">Selecione</option></select></label>
+                      <label class="campo-matriz"><span class="rotulo-matriz">OBJETIVO BSC</span><select id="mapro-objetivo"><option value="">Selecione</option></select></label>
+                      <button id="baixar-bsc-mapro" class="botao-baixar-bsc" type="button" disabled>BAIXAR BSC</button>
+                    </div>
+
+                    <div class="campo-matriz area-foto-lider">
+                      <span class="rotulo-matriz">IMAGEM DO LÍDER</span>
+                      <button id="remover-foto-lider" class="remover-foto-lider" type="button"
+                        aria-label="Remover imagem do líder" title="Remover imagem" hidden>×</button>
+                      <button id="acionador-foto-lider" class="conteudo-foto-lider" type="button"
+                        aria-label="Selecionar foto do líder" title="Clique para selecionar uma imagem">
+                        <img id="foto-lider-mapro" alt="Foto do líder do projeto" hidden>
+                        <span id="placeholder-foto-lider" aria-hidden="true">
+                          <svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM4 21a8 8 0 0 1 16 0"/></svg>
+                          <small>CLIQUE PARA SELECIONAR</small>
+                        </span>
+                      </button>
+                      <input id="arquivo-foto-lider" class="entrada-arquivo-oculta" type="file"
+                        accept="image/png,image/jpeg,image/webp">
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              <section class="bloco-matriz bloco-plano-mapro" aria-labelledby="titulo-plano-projeto">
+                <h2 id="titulo-plano-projeto" class="titulo-bloco-matriz">PLANO DO PROJETO</h2>
+                <div class="grade-plano-mapro">
+                  <label class="campo-matriz campo-texto-plano">
+                    <span class="rotulo-matriz">O QUE É O PROJETO</span>
+                    <textarea id="mapro-o-que-e" maxlength="3000" rows="4"
+                      placeholder="Qual é a descrição do projeto?"></textarea>
+                  </label>
+                  <label class="campo-matriz campo-texto-plano">
+                    <span class="rotulo-matriz">POR QUÊ</span>
+                    <textarea id="mapro-porque" maxlength="3000" rows="4"
+                      placeholder="Por que o projeto está sendo feito?"></textarea>
+                  </label>
+                  <label class="campo-matriz campo-texto-plano">
+                    <span class="rotulo-matriz">RESULTADOS ESPERADOS</span>
+                    <textarea id="mapro-resultados" maxlength="3000" rows="4"
+                      placeholder="O que se espera alcançar ao concluir este projeto?"></textarea>
+                  </label>
+                  <label class="campo-matriz campo-texto-plano">
+                    <span class="rotulo-matriz">INDICADORES DO PROJETO</span>
+                    <textarea id="mapro-indicadores" maxlength="3000" rows="4"
+                      placeholder="Informe as métricas utilizadas para medir o desempenho do projeto."></textarea>
+                  </label>
+                </div>
+                <div class="grade-complementos-mapro">
+                  <fieldset class="pergunta-complementar-mapro">
+                    <legend>É um processo crítico?</legend>
+                    <div class="opcoes-binarias-mapro">
+                      <label><input type="radio" name="mapro-processo-critico" value="SIM"><span>Sim</span></label>
+                      <label><input type="radio" name="mapro-processo-critico" value="NÃO"><span>Não</span></label>
+                    </div>
+                  </fieldset>
+                  <fieldset class="pergunta-complementar-mapro">
+                    <legend>O projeto envolverá algum sistema?</legend>
+                    <div class="opcoes-binarias-mapro">
+                      <label><input type="radio" name="mapro-envolve-sistema" value="SIM"><span>Sim</span></label>
+                      <label><input type="radio" name="mapro-envolve-sistema" value="NÃO"><span>Não</span></label>
+                    </div>
+                    <label id="campo-sistemas-mapro" class="campo-sistemas-mapro" hidden>
+                      <span>QUAL/QUAIS SISTEMAS?</span>
+                      <textarea id="mapro-sistemas-envolvidos" minlength="3" maxlength="3000" rows="3"
+                        placeholder="Informe o nome do sistema ou dos sistemas envolvidos."></textarea>
+                    </label>
+                  </fieldset>
+                </div>
+              </section>
+
+              <div class="acoes-formulario-mapros">
+                <p id="estado-autosave-mapro" class="estado-autosave-mapro" role="status" aria-live="polite">
+                  Cabeçalho salvo automaticamente
+                </p>
+              </div>
+            </form>
+          </section>
+
+          <section class="cartao-mapros secao-atividades-mapro">
+            <div class="estrutura-corpo-projeto-mapro">
+              <div class="titulo-corpo-projeto">
+                <div class="acoes-esquerda-corpo-projeto">
+                  <button id="informacao-corpo-projeto-mapro" class="botao-informacao-corpo-projeto-mapro"
+                    type="button" aria-label="Como usar o corpo do projeto"
+                    aria-controls="modal-legenda-corpo-projeto-mapro" aria-haspopup="dialog"
+                    title="Como usar o corpo do projeto">COMO USAR</button>
+                  <button id="iniciar-acompanhamento-mapro" class="botao-iniciar-acompanhamento" type="button">
+                    INICIAR ACOMPANHAMENTO
+                  </button>
+                </div>
+                <h2>CORPO DO PROJETO</h2>
+                <div class="acoes-corpo-projeto">
+                  <button id="desfazer-atividade-mapro" class="botao-desfazer-atividade" type="button"
+                    title="Desfazer as últimas alterações, uma por vez" disabled>↶ DESFAZER</button>
+                  <button id="nova-atividade-raiz-mapro" class="botao-criar-topico" type="button">CRIAR TÓPICO</button>
+                  <button id="editar-atividades-mapro" class="botao-editar-atividades" type="button">
+                    ✎ EDITAR
+                  </button>
+                  <button id="salvar-prazos-mapro" class="botao-salvar-prazos" type="button"
+                    title="Salvar as alterações realizadas na tabela" disabled>💾 SALVAR EDIÇÕES</button>
+                </div>
+              </div>
+              <div id="estado-atividades-mapro" class="estado-tabela">Nenhuma atividade cadastrada.</div>
+              <div id="tabela-atividades-container" class="tabela-container" hidden>
+                <table class="tabela-usuarios tabela-atividades-mapro">
+                  <thead><tr>
+                    <th aria-label="Ações"></th><th>Nº</th><th>DESCRIÇÃO</th><th>RESPONSÁVEL</th>
+                    <th>DEPARTAMENTO</th><th>INÍCIO</th><th>SEMANA INÍCIO</th>
+                    <th>FINAL</th><th>SEMANA FINAL</th><th>PREDECESSORA</th><th>REPLANEJADO</th>
+                    <th>STATUS</th><th>SITUAÇÃO</th>
+                    <th>JUSTIFICATIVA</th><th>OBSERVAÇÃO/MOTIVO</th><th>MAIS</th>
+                  </tr></thead>
+                  <tbody id="corpo-atividades-mapro"></tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+        </div>
+      </section>
+      <footer id="rodape-projeto-mapros" class="rodape-mapros" hidden>
+        <div class="conteudo-rodape-mapros">
+          <p>© 2026 Grupo JCA <span aria-hidden="true">•</span> Desenvolvido por SGI</p>
+          <img id="logo-rodape-mapros" alt="Grupo JCA" loading="lazy">
+        </div>
+      </footer>
+    </main>
+
+    <div id="cabecalho-fixo-atividades-mapro" class="cabecalho-fixo-atividades-mapro"
+      aria-hidden="true" hidden>
+      <table id="tabela-cabecalho-fixo-atividades-mapro"
+        class="tabela-usuarios tabela-atividades-mapro tabela-cabecalho-fixo-atividades-mapro"></table>
+    </div>
+
+    <div id="modal-informacao-cabecalho-mapro" class="fundo-modal" hidden>
+      <section class="modal modal-informacao-cabecalho-mapro" role="dialog" aria-modal="true"
+        aria-labelledby="titulo-modal-informacao-cabecalho-mapro">
+        <button class="fechar-modal" type="button"
+          data-fechar-modal="modal-informacao-cabecalho-mapro" aria-label="Fechar">×</button>
+        <h2 id="titulo-modal-informacao-cabecalho-mapro">COMO PREENCHER O CABEÇALHO</h2>
+        <p class="introducao-informacao-cabecalho-mapro">
+          Use as orientações abaixo para manter a identificação e o planejamento da MAPRO consistentes.
+        </p>
+        <div class="conteudo-informacao-cabecalho-mapro">
+          <section>
+            <h3>IDENTIFICAÇÃO E DADOS GERAIS</h3>
+            <dl>
+              <div><dt>ID da MAPRO</dt><dd>Gerado automaticamente a partir da solicitação aprovada.</dd></div>
+              <div><dt>Portfólio</dt><dd>Definido na solicitação da MAPRO e exibido automaticamente.</dd></div>
+              <div><dt>Nome do projeto</dt><dd>Informe um nome objetivo que identifique claramente o projeto.</dd></div>
+              <div><dt>Contagiro</dt><dd>Selecione a Contagiro designada para o acompanhamento do projeto.</dd></div>
+              <div><dt>Nível</dt><dd>Classifique o projeto conforme o alcance e a natureza da iniciativa:
+                <ul class="lista-detalhes-informacao-mapro">
+                  <li><strong>Estratégico:</strong> impacta toda a organização e envolve a alta liderança.</li>
+                  <li><strong>Tático:</strong> direcionado a um setor específico, com relevância para os objetivos organizacionais.</li>
+                  <li><strong>Operacional:</strong> focado na execução de atividades do dia a dia, com impacto direto na eficiência e na qualidade dos processos organizacionais.</li>
+                </ul>
+              </dd></div>
+              <div><dt>Início, prazo final e semana</dt><dd>Campos automáticos calculados pelas datas das atividades do projeto.</dd></div>
+              <div><dt>Líder do projeto</dt><dd>Selecione o usuário responsável pela liderança da MAPRO.</dd></div>
+              <div><dt>Departamento e e-mail</dt><dd>Preenchidos automaticamente conforme o cadastro do líder.</dd></div>
+            </dl>
+          </section>
+          <section>
+            <h3>ESTRATÉGIA BSC E IMAGEM</h3>
+            <dl>
+              <div><dt>Negócio</dt><dd>Selecione a área de atuação à qual o projeto está ligado.
+                <strong>Opções: Linhas, Fretamento e Turismo e Encomendas.</strong></dd></div>
+              <div><dt>Dimensão BSC</dt><dd>Corresponde à perspectiva estratégica do BSC à qual o projeto está alinhado. Está ligada a quatro dimensões:
+                <ul class="lista-detalhes-informacao-mapro lista-dimensoes-bsc-mapro">
+                  <li><strong>Financeiro</strong> — relacionada a resultados econômicos.</li>
+                  <li><strong>Mercado</strong> — voltada à satisfação e fidelização do cliente.</li>
+                  <li><strong>Aprendizado e inovação <span class="detalhe-negocio-dimensao-mapro">(fretamento, turismo e encomendas)</span> / Aprendizado e crescimento <span class="detalhe-negocio-dimensao-mapro">(linhas)</span></strong> — foca no desenvolvimento de pessoas e inovação.</li>
+                  <li><strong>Processos Internos</strong> — ligada à eficiência e qualidade.</li>
+                </ul>
+              </dd></div>
+              <div><dt>Objetivo BSC</dt><dd>Este campo se relaciona com a Dimensão BSC escolhida e deve ser preenchido com o objetivo estratégico específico para o qual o projeto contribui dentro da dimensão selecionada.</dd></div>
+              <div><dt>Imagem do líder</dt><dd>Clique na área da imagem para incluir ou substituir a foto compartilhada na MAPRO.</dd></div>
+            </dl>
+          </section>
+          <section>
+            <h3>PLANO DO PROJETO</h3>
+            <dl>
+              <div><dt>O que é o projeto</dt><dd>Descreva o escopo e o que será realizado.</dd></div>
+              <div><dt>Por que</dt><dd>Explique o problema, a necessidade ou a oportunidade que justifica o projeto.</dd></div>
+              <div><dt>Resultados esperados</dt><dd>São as principais entregas que o projeto deve gerar, ou seja, o que será melhorado ou modificado quando finalizado. Liste os resultados de forma clara, preferencialmente de forma mensurável. <strong>Exemplo: “Redução de 30% no tempo de resposta ao cliente em até 3 meses após a implantação”.</strong></dd></div>
+              <div><dt>Indicadores do projeto</dt><dd>Informe as métricas utilizadas para acompanhar o desempenho e os resultados.</dd></div>
+              <div><dt>Processo crítico</dt><dd>Informe se o projeto está relacionado a um processo considerado crítico para a operação.</dd></div>
+              <div><dt>Envolvimento de sistema</dt><dd>Marque Sim quando o projeto envolver algum sistema e informe qual ou quais sistemas serão impactados.</dd></div>
+            </dl>
+          </section>
+        </div>
+        <div class="acoes-modal">
+          <button class="botao-modal botao-confirmar" type="button"
+            data-fechar-modal="modal-informacao-cabecalho-mapro">ENTENDI</button>
+        </div>
+      </section>
+    </div>
+
+    <div id="modal-legenda-corpo-projeto-mapro" class="fundo-modal" hidden>
+      <section class="modal modal-legenda-corpo-mapro" role="dialog" aria-modal="true"
+        aria-labelledby="titulo-modal-legenda-corpo-projeto-mapro">
+        <button class="fechar-modal" type="button"
+          data-fechar-modal="modal-legenda-corpo-projeto-mapro" aria-label="Fechar">×</button>
+        <h2 id="titulo-modal-legenda-corpo-projeto-mapro">COMO USAR O CORPO DO PROJETO</h2>
+        <div class="legenda-status-mapros" aria-label="Legenda dos status e das ações">
+          <p><strong>Status:</strong> Situação atual das atividades.</p>
+          <p>Cada bolinha possui uma cor:</p>
+          <div class="itens-legenda-mapros">
+            <span><i class="bolinha-status status-azul"></i>Atividade concluída</span>
+            <span><i class="bolinha-status status-vermelho"></i>Atividade fora do prazo</span>
+            <span><i class="bolinha-status status-verde"></i>Atividade no prazo</span>
+            <span><i class="bolinha-status status-amarelo"></i>Prazo próximo ao vencimento</span>
+            <span><i class="bolinha-status status-cinza"></i>Atividade não aplicável</span>
+          </div>
+          <div class="legenda-acoes-mapros">
+            <p><strong>Predecessora:</strong> selecione a atividade que precisa terminar antes desta.</p>
+            <p>Quando o prazo da predecessora for repactuado, as sucessoras serão deslocadas
+              automaticamente pela mesma quantidade de dias.</p>
+            <p><strong>Replanejado:</strong> mostra o saldo de dias remanejados após o início do acompanhamento.</p>
+          </div>
+          <div class="legenda-acoes-mapros">
+            <p><strong>Ações:</strong> Controles disponíveis nas linhas do projeto.</p>
+            <div class="itens-legenda-mapros itens-legenda-acoes-mapros">
+              <span><i class="icone-acao-legenda acao-adicionar-legenda" aria-hidden="true">+</i>
+                Adicionar atividade ao tópico ou subatividade à atividade</span>
+              <span><i class="icone-acao-legenda acao-mover-legenda" aria-hidden="true">↕</i>
+                Mover tópico, atividade ou subatividade</span>
+              <span><i class="icone-acao-legenda acao-excluir-legenda" aria-hidden="true">×</i>
+                Excluir tópico, atividade ou subatividade</span>
+            </div>
+            <div class="itens-legenda-fluxo-mapros">
+              <span><i class="botao-legenda-fluxo desfazer-legenda" aria-hidden="true">↶ DESFAZER</i>
+                Reverte as últimas alterações realizadas, uma por vez.</span>
+              <span><i class="botao-legenda-fluxo criar-topico-legenda" aria-hidden="true">
+                CRIAR TÓPICO</i>
+                Cria um agrupador principal para organizar atividades e subatividades relacionadas ao mesmo tema dentro do projeto.</span>
+              <span><i class="botao-legenda-fluxo editar-legenda" aria-hidden="true">✎ EDITAR</i>
+                Habilita os campos e as ações da tabela para alteração.</span>
+              <span><i class="botao-legenda-fluxo salvar-datas-legenda" aria-hidden="true">💾 SALVAR EDIÇÕES</i>
+                Valida e salva todas as inclusões e alterações realizadas na tabela.</span>
+              <span><i class="botao-legenda-fluxo iniciar-acompanhamento-legenda" aria-hidden="true">
+                INICIAR ACOMPANHAMENTO</i>
+                Só pode ser acionado após o preenchimento do projeto estar concluído.</span>
+            </div>
+          </div>
+        </div>
+        <div class="acoes-modal">
+          <button class="botao-modal botao-confirmar" type="button"
+            data-fechar-modal="modal-legenda-corpo-projeto-mapro">ENTENDI</button>
+        </div>
+      </section>
+    </div>
+
+    <div id="modal-pesquisa-mapros" class="fundo-modal" hidden>
+      <section class="modal modal-grande" role="dialog" aria-modal="true"
+        aria-labelledby="titulo-modal-pesquisa-mapros">
+        <button class="fechar-modal" type="button" data-fechar-modal="modal-pesquisa-mapros"
+          aria-label="Fechar">×</button>
+        <h2 id="titulo-modal-pesquisa-mapros">PESQUISAR MAPRO</h2>
+        <form id="formulario-pesquisa-mapros" class="formulario-grid">
+          <label>ID da Mapro<input id="filtro-mapro-id" type="text" inputmode="numeric"
+            placeholder="Digite o ID"></label>
+          <label>Nome do projeto<input id="filtro-mapro-nome" type="text"
+            placeholder="Digite o nome do projeto"></label>
+          <label>Status
+            <select id="filtro-mapro-status">
+              <option value="">Todos</option>
+              <option value="AGUARDANDO INÍCIO">Aguardando início</option>
+              <option value="EM ANDAMENTO">Em andamento</option>
+              <option value="CONCLUÍDA">Concluída</option>
+              <option value="NÃO APLICÁVEL">Não aplicável</option>
+              <option value="CANCELADA">Cancelada</option>
+              <option value="ARQUIVADA">Arquivada</option>
+            </select>
+          </label>
+          <label>Data de início<input id="filtro-mapro-data-inicio" type="date"></label>
+          <label>Data final<input id="filtro-mapro-data-final" type="date"></label>
+          <div class="acoes-modal formulario-largura-total">
+            <button class="botao-modal botao-cancelar" type="button"
+              data-fechar-modal="modal-pesquisa-mapros">CANCELAR</button>
+            <button class="botao-modal botao-confirmar" type="submit">PESQUISAR</button>
+          </div>
+        </form>
+      </section>
+    </div>
+
+    <div id="modal-participantes-mapro" class="fundo-modal" hidden>
+      <section class="modal modal-confirmacao" role="dialog" aria-modal="true" aria-labelledby="titulo-modal-participantes-mapro">
+        <button class="fechar-modal" type="button" data-fechar-modal="modal-participantes-mapro" aria-label="Fechar">×</button>
+        <div class="titulo-modal-participantes-mapro">
+          <h2 id="titulo-modal-participantes-mapro">ADICIONAR PARTICIPANTES</h2>
+          <button id="informacao-permissoes-participantes-mapro"
+            class="botao-informacao-participantes-mapro" type="button"
+            aria-label="Informações sobre as permissões" title="Entenda as permissões">i</button>
+        </div>
+        <form id="formulario-participantes-mapro" class="formulario-participantes-mapro">
+          <input id="pesquisa-participante-mapro" type="search" placeholder="Pesquisar participante">
+          <div id="lista-participantes-mapro" class="lista-participantes-mapro"></div>
+          <div class="acoes-modal">
+            <button class="botao-modal botao-cancelar" type="button" data-fechar-modal="modal-participantes-mapro">CANCELAR</button>
+            <button id="salvar-participantes-mapro" class="botao-modal botao-confirmar" type="submit">ADICIONAR</button>
+          </div>
+        </form>
+      </section>
+    </div>
+
+    <div id="modal-informacao-permissoes-participantes-mapro" class="fundo-modal" hidden>
+      <section class="modal modal-permissoes-participantes-mapro" role="dialog" aria-modal="true"
+        aria-labelledby="titulo-informacao-permissoes-participantes-mapro">
+        <button class="fechar-modal" type="button"
+          data-fechar-modal="modal-informacao-permissoes-participantes-mapro"
+          aria-label="Fechar">×</button>
+        <h2 id="titulo-informacao-permissoes-participantes-mapro">TIPOS DE AUTORIZAÇÃO</h2>
+        <p>Escolha a permissão de acordo com o que o participante poderá fazer na MAPRO.</p>
+        <dl class="lista-permissoes-participantes-mapro">
+          <div>
+            <dt>ACESSO</dt>
+            <dd>Pode visualizar o projeto, o cabeçalho, as atividades e as evidências. Não pode editar informações nem ser selecionado como responsável por atividades.</dd>
+          </div>
+          <div>
+            <dt>OBSERVADOR</dt>
+            <dd>Pode visualizar o projeto, ser selecionado como responsável e editar somente as atividades que estiverem sob sua responsabilidade. Não pode alterar o cabeçalho, criar, excluir ou mover itens.</dd>
+          </div>
+          <div>
+            <dt>EDITOR</dt>
+            <dd>Pode editar o cabeçalho e todas as atividades, criar, excluir e mover itens e iniciar o acompanhamento do projeto.</dd>
+          </div>
+        </dl>
+        <p class="nota-permissoes-participantes-mapro">
+          A inclusão e a remoção de participantes continuam restritas ao líder do projeto e ao SGI (Admin).
+        </p>
+        <div class="acoes-modal">
+          <button class="botao-modal botao-confirmar" type="button"
+            data-fechar-modal="modal-informacao-permissoes-participantes-mapro">ENTENDI</button>
+        </div>
+      </section>
+    </div>
+
+    <div id="modal-historico-reprogramacao" class="fundo-modal" hidden>
+      <section class="modal modal-grande modal-historico-padrao" role="dialog" aria-modal="true"
+        aria-labelledby="titulo-historico-reprogramacao">
+        <button class="fechar-modal" type="button" data-fechar-modal="modal-historico-reprogramacao"
+          aria-label="Fechar">×</button>
+        <h2 id="titulo-historico-reprogramacao">HISTÓRICO DE REPROGRAMAÇÃO</h2>
+        <div id="conteudo-historico-reprogramacao" class="conteudo-historico-reprogramacao"></div>
+      </section>
+    </div>
+
+    <div id="modal-evidencia-atividade" class="fundo-modal" hidden>
+      <section class="modal modal-confirmacao modal-evidencia-padrao" role="dialog" aria-modal="true" aria-labelledby="titulo-modal-evidencia">
+        <button class="fechar-modal" type="button" data-fechar-modal="modal-evidencia-atividade" aria-label="Fechar">×</button>
+        <h2 id="titulo-modal-evidencia">EVIDÊNCIA DA ATIVIDADE</h2>
+        <div class="conteudo-modal-centralizado">
+          <p id="nome-atividade-evidencia-mapro"></p>
+          <div id="evidencia-atual-mapro" class="evidencia-atual-mapro" hidden>
+            <span>Evidência anexada:</span>
+            <a id="link-evidencia-atual-mapro" href="#" target="_blank" rel="noopener noreferrer"></a>
+          </div>
+          <input id="arquivo-evidencia-modal-mapro" type="file">
+        </div>
+        <div class="acoes-modal">
+          <button class="botao-modal botao-cancelar" type="button" data-fechar-modal="modal-evidencia-atividade">CANCELAR</button>
+          <button id="confirmar-evidencia-modal-mapro" class="botao-modal botao-confirmar" type="button">ANEXAR</button>
+        </div>
+      </section>
+    </div>
+
+    <div id="modal-iniciar-acompanhamento" class="fundo-modal" hidden>
+      <section class="modal modal-confirmacao modal-confirmacao-acao" role="dialog" aria-modal="true"
+        aria-labelledby="titulo-iniciar-acompanhamento">
+        <button class="fechar-modal" type="button" data-fechar-modal="modal-iniciar-acompanhamento" aria-label="Fechar">×</button>
+        <h2 id="titulo-iniciar-acompanhamento">INICIAR ACOMPANHAMENTO</h2>
+        <p class="texto-confirmacao">Depois da confirmação, qualquer alteração de prazo será registrada como replanejamento e exigirá o motivo na observação. Esta ação não pode ser desfeita.</p>
+        <div class="acoes-modal">
+          <button class="botao-modal botao-cancelar" type="button" data-fechar-modal="modal-iniciar-acompanhamento">CANCELAR</button>
+          <button id="confirmar-iniciar-acompanhamento" class="botao-modal botao-confirmar" type="button">CONFIRMAR</button>
+        </div>
+      </section>
+    </div>
+
+    <div id="modal-historico-prazo-projeto" class="fundo-modal" hidden>
+      <section class="modal modal-grande modal-historico-padrao" role="dialog" aria-modal="true"
+        aria-labelledby="titulo-historico-prazo-projeto">
+        <button class="fechar-modal" type="button" data-fechar-modal="modal-historico-prazo-projeto"
+          aria-label="Fechar">×</button>
+        <h2 id="titulo-historico-prazo-projeto">HISTÓRICO DO PRAZO FINAL DO PROJETO</h2>
+        <div id="conteudo-historico-prazo-projeto" class="conteudo-historico-reprogramacao"></div>
+      </section>
+    </div>
+
+    <div id="modal-mover-atividade-mapro" class="fundo-modal" hidden>
+      <section class="modal modal-confirmacao" role="dialog" aria-modal="true"
+        aria-labelledby="titulo-mover-atividade-mapro">
+        <button class="fechar-modal" type="button" data-fechar-modal="modal-mover-atividade-mapro"
+          aria-label="Fechar">×</button>
+        <h2 id="titulo-mover-atividade-mapro">MOVER ATIVIDADE</h2>
+        <form id="formulario-mover-atividade-mapro" class="formulario-mover-atividade-mapro">
+          <p id="nome-atividade-mover-mapro"></p>
+          <label>Novo item superior
+            <select id="novo-pai-atividade-mapro" required></select>
+          </label>
+          <div class="acoes-modal">
+            <button class="botao-modal botao-cancelar" type="button"
+              data-fechar-modal="modal-mover-atividade-mapro">CANCELAR</button>
+            <button id="confirmar-mover-atividade-mapro" class="botao-modal botao-confirmar"
+              type="submit">MOVER</button>
+          </div>
+        </form>
+      </section>
+    </div>
+
+    <div id="modal-inatividade-mapros" class="fundo-modal" hidden>
+      <section class="modal modal-confirmacao modal-confirmacao-acao" role="dialog" aria-modal="true"
+        aria-labelledby="titulo-modal-inatividade-mapros">
+        <h2 id="titulo-modal-inatividade-mapros">VERIFICAR INATIVIDADE</h2>
+        <p id="texto-modal-inatividade-mapros" class="texto-confirmacao"></p>
+        <div class="acoes-modal">
+          <button class="botao-modal botao-nao" type="button"
+            data-fechar-modal="modal-inatividade-mapros">NÃO</button>
+          <button id="confirmar-inatividade-mapros" class="botao-modal botao-confirmar"
+            type="button">SIM</button>
+        </div>
+      </section>
+    </div>
+
+    <?!= incluir('Carregamento'); ?>
+    <div id="aviso" class="aviso" role="status" hidden></div>
+    <?!= incluir('ComponentesJS'); ?>
+    <?!= incluir('maprosJS'); ?>
+  </body>
+</html>

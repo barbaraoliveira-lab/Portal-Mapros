@@ -1,0 +1,582 @@
+<script>
+  let tempoAviso;
+  let urlAplicacao = '';
+  let usuariosExibidos = [];
+  let todosUsuarios = [];
+  let usuariosIniciaisCarregados = false;
+  let usuarioSelecionado = null;
+  let filtrosAtuais = {};
+  let departamentosDisponiveis = [];
+
+  function mostrarAviso(mensagem, falha) {
+    const aviso = document.getElementById('aviso');
+    clearTimeout(tempoAviso);
+    aviso.textContent = mensagem;
+    aviso.classList.toggle('falha', Boolean(falha));
+    aviso.hidden = false;
+    tempoAviso = setTimeout(function () { aviso.hidden = true; }, 5000);
+  }
+
+  function iniciarPaginaUsuarios() {
+    MaproUI.showLoading('Carregando usuários...');
+    const inicial = MaproUI.readInitialData();
+    if (inicial && inicial.pagina === 'cadastrosDeUsuarios' && inicial.sistema) {
+      processarAcessoUsuarios(
+        inicial.sistema,
+        inicial.usuarios || null,
+        inicial.departamentos || []
+      );
+      return;
+    }
+    google.script.run
+      .withSuccessHandler(function (pacote) {
+        processarAcessoUsuarios(pacote.sistema, pacote.usuarios, pacote.departamentos || []);
+      })
+      .withFailureHandler(function () {
+        MaproUI.hideLoading();
+        mostrarFalhaDeAcesso('Falha ao validar seu acesso.');
+      })
+      .carregarPaginaUsuariosInicial();
+  }
+
+  function processarAcessoUsuarios(respostaSistema, respostaUsuarios, departamentos) {
+    if (!respostaSistema.sucesso || !respostaSistema.dados.acesso ||
+        respostaSistema.dados.nivel !== 'ADMIN') {
+      MaproUI.hideLoading();
+      const mensagem = respostaSistema.sucesso
+        ? 'Você não possui permissão para acessar o cadastro de usuários.'
+        : respostaSistema.mensagem;
+      mostrarFalhaDeAcesso(mensagem);
+      return;
+    }
+    urlAplicacao = respostaSistema.dados.urlAplicacao;
+    departamentosDisponiveis = departamentos || [];
+    preencherMenuDepartamentoUsuario();
+    if (respostaUsuarios) {
+      aplicarRespostaUsuarios(respostaUsuarios, filtrosAtuais);
+      return;
+    }
+    carregarUsuarios(filtrosAtuais, true);
+  }
+
+  function mostrarFalhaDeAcesso(mensagem) {
+    const estado = document.getElementById('carregando-usuarios');
+    estado.textContent = mensagem;
+    estado.classList.add('estado-tabela-erro');
+    document.querySelectorAll('.barra-ferramentas button').forEach(function (botao) {
+      botao.disabled = true;
+    });
+  }
+
+  function voltarParaInicio() {
+    if (urlAplicacao) {
+      MaproUI.navigate(urlAplicacao, 'Voltando ao início...');
+      return;
+    }
+    google.script.run
+      .withSuccessHandler(function (resposta) {
+        if (resposta.sucesso && resposta.dados.urlAplicacao) {
+          MaproUI.navigate(resposta.dados.urlAplicacao, 'Voltando ao início...');
+        }
+      })
+      .carregarSistema();
+  }
+
+  function carregarUsuarios(filtros, forcarServidor) {
+    const carregando = document.getElementById('carregando-usuarios');
+    const vazia = document.getElementById('tabela-vazia');
+    const container = document.getElementById('tabela-container');
+    carregando.textContent = 'Carregando usuários...';
+    carregando.hidden = false;
+    vazia.hidden = true;
+    container.hidden = true;
+
+    if (usuariosIniciaisCarregados && !forcarServidor) {
+      usuariosExibidos = filtrarUsuariosLocalmente(todosUsuarios, filtros || {});
+      carregando.hidden = true;
+      renderizarUsuarios();
+      return;
+    }
+
+    MaproUI.showLoading('Carregando usuários...');
+    google.script.run
+      .withSuccessHandler(function (resposta) {
+        aplicarRespostaUsuarios(resposta, filtros || {});
+      })
+      .withFailureHandler(function () {
+        MaproUI.hideLoading();
+        carregando.hidden = true;
+        vazia.textContent = 'Falha ao carregar os usuários.';
+        vazia.hidden = false;
+      })
+      .listarUsuarios({});
+  }
+
+  function aplicarRespostaUsuarios(resposta, filtros) {
+    MaproUI.hideLoading();
+    const carregando = document.getElementById('carregando-usuarios');
+    const vazia = document.getElementById('tabela-vazia');
+    carregando.hidden = true;
+    if (!resposta.sucesso) {
+      mostrarAviso(resposta.mensagem, true);
+      vazia.textContent = resposta.mensagem;
+      vazia.hidden = false;
+      return;
+    }
+    todosUsuarios = resposta.dados || [];
+    usuariosIniciaisCarregados = true;
+    preencherMenusPesquisaUsuarios();
+    usuariosExibidos = filtrarUsuariosLocalmente(todosUsuarios, filtros || {});
+    usuarioSelecionado = null;
+    renderizarUsuarios();
+  }
+
+  function preencherMenusPesquisaUsuarios() {
+    obterConfiguracoesMenusPesquisaUsuarios().forEach(function (configuracao) {
+      const lista = document.getElementById(configuracao.listaId);
+      const vistos = {};
+      const opcoes = todosUsuarios.map(function (usuario) {
+        return {
+          valor: String(usuario[configuracao.campo] || '').trim(),
+          rotulo: String(usuario[configuracao.rotulo] || '').trim()
+        };
+      }).filter(function (item) {
+        const chave = item.valor.toLocaleLowerCase('pt-BR');
+        if (!item.valor || vistos[chave]) return false;
+        vistos[chave] = true;
+        return true;
+      }).sort(function (a, b) {
+        return a.valor.localeCompare(b.valor, 'pt-BR', {numeric: true});
+      });
+      lista.replaceChildren();
+      opcoes.forEach(function (item) {
+        const opcao = document.createElement('button');
+        opcao.type = 'button';
+        opcao.className = 'opcao-pesquisavel';
+        opcao.dataset.valor = item.valor;
+        opcao.dataset.busca = normalizarPesquisaUsuario_(item.valor + ' ' + item.rotulo);
+        opcao.textContent = item.valor;
+        if (item.rotulo && item.rotulo !== item.valor) {
+          const apoio = document.createElement('small');
+          apoio.textContent = item.rotulo;
+          opcao.appendChild(apoio);
+        }
+        opcao.addEventListener('click', function () {
+          document.getElementById(configuracao.campoId).value = item.valor;
+          fecharMenuPesquisaUsuario_(configuracao);
+        });
+        lista.appendChild(opcao);
+      });
+    });
+  }
+
+  function obterConfiguracoesMenusPesquisaUsuarios() {
+    return [
+      {campoId: 'filtro-id', listaId: 'opcoes-filtro-id', campo: 'id', rotulo: 'nome'},
+      {campoId: 'filtro-matricula', listaId: 'opcoes-filtro-matricula', campo: 'matricula', rotulo: 'nome'},
+      {campoId: 'filtro-nome', listaId: 'opcoes-filtro-nome', campo: 'nome', rotulo: 'email'},
+      {campoId: 'filtro-email', listaId: 'opcoes-filtro-email', campo: 'email', rotulo: 'nome'},
+      {campoId: 'filtro-departamento', listaId: 'opcoes-filtro-departamento',
+        campo: 'departamento', rotulo: 'nome'}
+    ];
+  }
+
+  function preencherMenuDepartamentoUsuario() {
+    const lista = document.getElementById('opcoes-usuario-departamento');
+    lista.replaceChildren();
+    departamentosDisponiveis.forEach(function (departamento) {
+      const opcao = document.createElement('button');
+      opcao.type = 'button';
+      opcao.className = 'opcao-pesquisavel';
+      opcao.dataset.busca = normalizarPesquisaUsuario_(departamento);
+      opcao.textContent = departamento;
+      opcao.addEventListener('click', function () {
+        document.getElementById('usuario-departamento').value = departamento;
+        fecharMenuDepartamentoUsuario();
+      });
+      lista.appendChild(opcao);
+    });
+  }
+
+  function abrirMenuDepartamentoUsuario() {
+    const campo = document.getElementById('usuario-departamento');
+    const lista = document.getElementById('opcoes-usuario-departamento');
+    const busca = normalizarPesquisaUsuario_(campo.value);
+    let visiveis = 0;
+    lista.querySelectorAll('.opcao-pesquisavel').forEach(function (opcao) {
+      const corresponde = !busca || opcao.dataset.busca.indexOf(busca) !== -1;
+      opcao.hidden = !corresponde;
+      if (corresponde) visiveis += 1;
+    });
+    lista.hidden = !visiveis;
+    campo.setAttribute('aria-expanded', String(Boolean(visiveis)));
+  }
+
+  function fecharMenuDepartamentoUsuario() {
+    document.getElementById('opcoes-usuario-departamento').hidden = true;
+    document.getElementById('usuario-departamento').setAttribute('aria-expanded', 'false');
+  }
+
+  function configurarMenuDepartamentoUsuario() {
+    const campo = document.getElementById('usuario-departamento');
+    campo.addEventListener('focus', abrirMenuDepartamentoUsuario);
+    campo.addEventListener('click', abrirMenuDepartamentoUsuario);
+    campo.addEventListener('input', abrirMenuDepartamentoUsuario);
+    campo.addEventListener('keydown', function (evento) {
+      if (evento.key === 'Escape') {
+        evento.stopPropagation();
+        fecharMenuDepartamentoUsuario();
+      }
+      if (evento.key === 'ArrowDown') {
+        const primeira = document.getElementById('opcoes-usuario-departamento')
+          .querySelector('.opcao-pesquisavel:not([hidden])');
+        if (primeira) { evento.preventDefault(); primeira.focus(); }
+      }
+    });
+  }
+
+  function normalizarPesquisaUsuario_(valor) {
+    return String(valor || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .toLocaleLowerCase('pt-BR').trim();
+  }
+
+  function abrirMenuPesquisaUsuario_(configuracao) {
+    obterConfiguracoesMenusPesquisaUsuarios().forEach(function (item) {
+      if (item.campoId !== configuracao.campoId) fecharMenuPesquisaUsuario_(item);
+    });
+    const campo = document.getElementById(configuracao.campoId);
+    const lista = document.getElementById(configuracao.listaId);
+    const busca = normalizarPesquisaUsuario_(campo.value);
+    let visiveis = 0;
+    lista.querySelectorAll('.opcao-pesquisavel').forEach(function (opcao) {
+      const corresponde = !busca || opcao.dataset.busca.indexOf(busca) !== -1;
+      opcao.hidden = !corresponde;
+      if (corresponde) visiveis += 1;
+    });
+    lista.hidden = !visiveis;
+    campo.setAttribute('aria-expanded', String(Boolean(visiveis)));
+  }
+
+  function fecharMenuPesquisaUsuario_(configuracao) {
+    const lista = document.getElementById(configuracao.listaId);
+    const campo = document.getElementById(configuracao.campoId);
+    lista.hidden = true;
+    campo.setAttribute('aria-expanded', 'false');
+  }
+
+  function configurarMenusPesquisaUsuarios() {
+    obterConfiguracoesMenusPesquisaUsuarios().forEach(function (configuracao) {
+      const campo = document.getElementById(configuracao.campoId);
+      campo.addEventListener('focus', function () { abrirMenuPesquisaUsuario_(configuracao); });
+      campo.addEventListener('click', function () { abrirMenuPesquisaUsuario_(configuracao); });
+      campo.addEventListener('input', function () { abrirMenuPesquisaUsuario_(configuracao); });
+      campo.addEventListener('keydown', function (evento) {
+        if (evento.key === 'Escape') {
+          evento.stopPropagation();
+          fecharMenuPesquisaUsuario_(configuracao);
+        }
+        if (evento.key === 'ArrowDown') {
+          const primeira = document.getElementById(configuracao.listaId)
+            .querySelector('.opcao-pesquisavel:not([hidden])');
+          if (primeira) { evento.preventDefault(); primeira.focus(); }
+        }
+      });
+    });
+  }
+
+  function filtrarUsuariosLocalmente(usuarios, filtros) {
+    const normalizar = function (valor) {
+      return String(valor || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        .toLocaleLowerCase('pt-BR').trim();
+    };
+    const id = String(filtros.id || '').trim().replace(/^0+/, '') || '';
+    return usuarios.filter(function (usuario) {
+      const idUsuario = String(usuario.id || '').replace(/^0+/, '') || '0';
+      const status = String(filtros.status || '').toUpperCase();
+      return (!id || idUsuario.indexOf(id) !== -1) &&
+        (!normalizar(filtros.nome) || normalizar(usuario.nome).indexOf(normalizar(filtros.nome)) !== -1) &&
+        (!normalizar(filtros.email) || normalizar(usuario.email).indexOf(normalizar(filtros.email)) !== -1) &&
+        (!normalizar(filtros.matricula) || normalizar(usuario.matricula).indexOf(normalizar(filtros.matricula)) !== -1) &&
+        (!normalizar(filtros.departamento) ||
+          normalizar(usuario.departamento).indexOf(normalizar(filtros.departamento)) !== -1) &&
+        (!status || status === 'TODOS' || String(usuario.status).toUpperCase() === status);
+    });
+  }
+
+  function renderizarUsuarios() {
+    const corpo = document.getElementById('corpo-tabela-usuarios');
+    const vazia = document.getElementById('tabela-vazia');
+    const container = document.getElementById('tabela-container');
+    corpo.replaceChildren();
+
+    if (!usuariosExibidos.length) {
+      vazia.textContent = 'Nenhum usuário encontrado.';
+      vazia.hidden = false;
+      container.hidden = true;
+      return;
+    }
+
+    usuariosExibidos.forEach(function (usuario) {
+      const linha = document.createElement('tr');
+      linha.tabIndex = 0;
+      linha.dataset.id = usuario.id;
+      linha.setAttribute('aria-label', 'Selecionar ' + usuario.nome);
+      adicionarCelula(linha, usuario.id);
+      adicionarCelula(linha, usuario.nome);
+      adicionarCelula(linha, usuario.email);
+      adicionarCelula(linha, usuario.matricula);
+      adicionarCelula(linha, usuario.departamento);
+      adicionarCelula(linha, formatarNivel(usuario.nivel));
+
+      const celulaStatus = document.createElement('td');
+      const status = document.createElement('span');
+      status.className = 'status-usuario ' +
+        (usuario.status === 'ATIVO' ? 'status-ativo' : 'status-inativo');
+      status.textContent = usuario.status;
+      celulaStatus.appendChild(status);
+      linha.appendChild(celulaStatus);
+      adicionarCelula(linha, formatarData(usuario.atualizadoEm));
+
+      linha.addEventListener('click', function () { selecionarUsuario(usuario, linha); });
+      linha.addEventListener('keydown', function (evento) {
+        if (evento.key === 'Enter' || evento.key === ' ') {
+          evento.preventDefault();
+          selecionarUsuario(usuario, linha);
+        }
+      });
+      corpo.appendChild(linha);
+    });
+    vazia.hidden = true;
+    container.hidden = false;
+  }
+
+  function adicionarCelula(linha, valor) {
+    const celula = document.createElement('td');
+    celula.textContent = String(valor || '—');
+    linha.appendChild(celula);
+  }
+
+  function selecionarUsuario(usuario, linha) {
+    usuarioSelecionado = usuario;
+    document.querySelectorAll('.tabela-usuarios tbody tr').forEach(function (item) {
+      item.classList.toggle('linha-selecionada', item === linha);
+    });
+  }
+
+  function formatarNivel(nivel) {
+    return { ADMIN: 'ADMINISTRADOR', PARTICIPANTE: 'PARTICIPANTE' }[nivel] || nivel;
+  }
+
+  function formatarData(valor) {
+    if (!valor) return '—';
+    const data = new Date(valor);
+    if (Number.isNaN(data.getTime())) return String(valor);
+    const dataFormatada = new Intl.DateTimeFormat('pt-BR', {
+      day: '2-digit', month: '2-digit', year: 'numeric'
+    }).format(data);
+    const horaFormatada = new Intl.DateTimeFormat('pt-BR', {
+      hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
+    }).format(data);
+    return dataFormatada + ' ' + horaFormatada;
+  }
+
+  function abrirModal(id) {
+    const modal = document.getElementById(id);
+    modal.hidden = false;
+    document.body.classList.add('modal-aberto');
+    const primeiroCampo = modal.querySelector('input:not([readonly]), select, button');
+    if (primeiroCampo) primeiroCampo.focus();
+  }
+
+  function fecharModal(id) {
+    document.getElementById(id).hidden = true;
+    if (!document.querySelector('.fundo-modal:not([hidden])')) {
+      document.body.classList.remove('modal-aberto');
+    }
+  }
+
+  function abrirNovoUsuario() {
+    const formulario = document.getElementById('formulario-usuario');
+    formulario.reset();
+    document.getElementById('usuario-id').value = '';
+    document.getElementById('usuario-status').value = 'ATIVO';
+    document.getElementById('titulo-modal-usuario').textContent = 'CADASTRAR USUÁRIO';
+    document.getElementById('salvar-usuario').textContent = 'CADASTRAR';
+    abrirModal('modal-usuario');
+  }
+
+  function abrirEdicaoUsuario() {
+    if (!usuarioSelecionado) return mostrarAviso('Selecione uma linha para editar.', true);
+    document.getElementById('usuario-id').value = usuarioSelecionado.id;
+    document.getElementById('usuario-matricula').value = usuarioSelecionado.matricula;
+    document.getElementById('usuario-nome').value = usuarioSelecionado.nome;
+    document.getElementById('usuario-email').value = usuarioSelecionado.email;
+    document.getElementById('usuario-departamento').value = usuarioSelecionado.departamento;
+    document.getElementById('usuario-nivel').value = usuarioSelecionado.nivel;
+    document.getElementById('usuario-status').value = usuarioSelecionado.status;
+    document.getElementById('titulo-modal-usuario').textContent = 'EDITAR USUÁRIO';
+    document.getElementById('salvar-usuario').textContent = 'EDITAR';
+    abrirModal('modal-usuario');
+  }
+
+  function salvarFormularioUsuario(evento) {
+    evento.preventDefault();
+    const botao = document.getElementById('salvar-usuario');
+    const textoOriginal = botao.textContent;
+    const dados = {
+      id: document.getElementById('usuario-id').value,
+      matricula: document.getElementById('usuario-matricula').value,
+      nome: document.getElementById('usuario-nome').value,
+      email: document.getElementById('usuario-email').value,
+      departamento: document.getElementById('usuario-departamento').value,
+      nivel: document.getElementById('usuario-nivel').value,
+      status: document.getElementById('usuario-status').value
+    };
+    botao.disabled = true;
+    botao.textContent = 'SALVANDO...';
+    MaproUI.showLoading('Salvando usuário...');
+
+    google.script.run
+      .withSuccessHandler(function (resposta) {
+        botao.disabled = false;
+        botao.textContent = textoOriginal;
+        if (!resposta.sucesso) {
+          MaproUI.hideLoading();
+          return mostrarAviso(resposta.mensagem, true);
+        }
+        fecharModal('modal-usuario');
+        mostrarAviso(resposta.mensagem);
+        carregarUsuarios(filtrosAtuais, true);
+      })
+      .withFailureHandler(function () {
+        MaproUI.hideLoading();
+        botao.disabled = false;
+        botao.textContent = textoOriginal;
+        mostrarAviso('Falha ao salvar o usuário.', true);
+      })
+      .salvarUsuario(dados);
+  }
+
+  function abrirExclusaoUsuario() {
+    if (!usuarioSelecionado) return mostrarAviso('Selecione uma linha para excluir.', true);
+    const texto = document.getElementById('texto-exclusao');
+    MaproUI.renderConfirmationMessage(texto, [
+      'Deseja realmente ',
+      { emphasis: 'EXCLUIR' },
+      ' o usuário ',
+      { emphasis: usuarioSelecionado.nome },
+      '? Esta ação removerá o cadastro da base de usuários.'
+    ]);
+    abrirModal('modal-exclusao');
+  }
+
+  function confirmarExclusaoUsuario() {
+    if (!usuarioSelecionado) return;
+    const botao = document.getElementById('confirmar-exclusao');
+    const id = usuarioSelecionado.id;
+    botao.disabled = true;
+    botao.textContent = 'EXCLUINDO...';
+    MaproUI.showLoading('Excluindo usuário...');
+    google.script.run
+      .withSuccessHandler(function (resposta) {
+        botao.disabled = false;
+        botao.textContent = 'SIM';
+        if (!resposta.sucesso) {
+          MaproUI.hideLoading();
+          return mostrarAviso(resposta.mensagem, true);
+        }
+        fecharModal('modal-exclusao');
+        mostrarAviso(resposta.mensagem);
+        carregarUsuarios(filtrosAtuais, true);
+      })
+      .withFailureHandler(function () {
+        MaproUI.hideLoading();
+        botao.disabled = false;
+        botao.textContent = 'SIM';
+        mostrarAviso('Falha ao excluir o usuário.', true);
+      })
+      .excluirUsuario(id);
+  }
+
+  function pesquisarUsuarios(evento) {
+    evento.preventDefault();
+    filtrosAtuais = {
+      id: document.getElementById('filtro-id').value,
+      matricula: document.getElementById('filtro-matricula').value,
+      nome: document.getElementById('filtro-nome').value,
+      email: document.getElementById('filtro-email').value,
+      departamento: document.getElementById('filtro-departamento').value,
+      status: document.getElementById('filtro-status').value
+    };
+    fecharModal('modal-filtros');
+    carregarUsuarios(filtrosAtuais);
+  }
+
+  function limparFiltros() {
+    document.getElementById('formulario-filtros').reset();
+    filtrosAtuais = {};
+    carregarUsuarios(filtrosAtuais);
+    mostrarAviso('Filtros removidos.');
+  }
+
+  function baixarCsv() {
+    if (!usuariosExibidos.length) return mostrarAviso('Não há usuários para exportar.', true);
+    const linhas = [[
+      'ID', 'NOME', 'EMAIL', 'MATRICULA', 'DEPARTAMENTO', 'NIVEL', 'STATUS', 'ATUALIZADO_EM'
+    ]];
+    usuariosExibidos.forEach(function (usuario) {
+      linhas.push([
+        usuario.id, usuario.nome, usuario.email, usuario.matricula,
+        usuario.departamento, usuario.nivel, usuario.status, formatarData(usuario.atualizadoEm)
+      ]);
+    });
+    const csv = '\uFEFF' + linhas.map(function (linha) {
+      return linha.map(function (valor) {
+        return '"' + String(valor || '').replace(/"/g, '""') + '"';
+      }).join(';');
+    }).join('\r\n');
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'usuarios_mapro.csv';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  document.getElementById('voltar-inicio').addEventListener('click', voltarParaInicio);
+  document.getElementById('novo-usuario').addEventListener('click', abrirNovoUsuario);
+  document.getElementById('editar-usuario').addEventListener('click', abrirEdicaoUsuario);
+  document.getElementById('excluir-usuario').addEventListener('click', abrirExclusaoUsuario);
+  document.getElementById('baixar-csv').addEventListener('click', baixarCsv);
+  document.getElementById('abrir-filtros').addEventListener('click', function () {
+    abrirModal('modal-filtros');
+  });
+  document.getElementById('limpar-filtros').addEventListener('click', limparFiltros);
+  document.getElementById('formulario-usuario').addEventListener('submit', salvarFormularioUsuario);
+  document.getElementById('formulario-filtros').addEventListener('submit', pesquisarUsuarios);
+  document.getElementById('confirmar-exclusao').addEventListener('click', confirmarExclusaoUsuario);
+  document.querySelectorAll('[data-fechar-modal]').forEach(function (botao) {
+    botao.addEventListener('click', function () { fecharModal(botao.dataset.fecharModal); });
+  });
+  document.querySelectorAll('.fundo-modal').forEach(function (fundo) {
+    fundo.addEventListener('click', function (evento) {
+      if (evento.target === fundo) fecharModal(fundo.id);
+    });
+  });
+  document.addEventListener('click', function (evento) {
+    if (evento.target.closest('.campo-filtro-usuario, .campo-departamento-usuario')) return;
+    obterConfiguracoesMenusPesquisaUsuarios().forEach(fecharMenuPesquisaUsuario_);
+    fecharMenuDepartamentoUsuario();
+  });
+  document.addEventListener('keydown', function (evento) {
+    if (evento.key !== 'Escape') return;
+    const modalAberto = document.querySelector('.fundo-modal:not([hidden])');
+    if (modalAberto) fecharModal(modalAberto.id);
+  });
+
+  configurarMenusPesquisaUsuarios();
+  configurarMenuDepartamentoUsuario();
+  iniciarPaginaUsuarios();
+</script>
