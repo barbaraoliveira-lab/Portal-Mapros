@@ -355,37 +355,67 @@ function carregarPaginaMapros() {
       }
     }
     const mapros = obterMaprosAcessiveis_(usuario, admin);
-    const portfolios = Array.from(new Set(mapros.map(function (mapro) {
-      return String(mapro['PORTFÓLIO'] || '').trim();
-    }).filter(Boolean))).sort(function (a, b) { return a.localeCompare(b, 'pt-BR'); });
-    return {
-      sucesso: true,
-      dados: {
-        admin: admin,
-        titulo: admin ? 'MAPROS' : 'MINHAS MAPROS',
-        usuario: {
-          id: formatarId_(Number(usuario.ID)),
-          nome: String(usuario.NOME || ''),
-          email: normalizarEmail_(usuario.EMAIL)
-        },
-        portfolios: portfolios,
-        logoUrl: 'https://drive.google.com/thumbnail?id=' +
-          CONFIG.logoCadastroId + '&sz=w4000',
-        logoEmpresaUrl: 'https://drive.google.com/thumbnail?id=' +
-          CONFIG.logoEmpresaId + '&sz=w600',
-        urlAplicacao: ScriptApp.getService().getUrl()
-      }
-    };
+    return montarConfiguracaoPaginaMapros_(usuario, admin, mapros);
   } catch (erro) {
     return respostaDeErro_(erro);
   }
 }
 
 function carregarPaginaMaprosInicial() {
-  const configuracao = carregarPaginaMapros();
+  try {
+    garantirBancoConfigurado_();
+    const usuario = exigirUsuarioAtivo_();
+    const admin = String(usuario.NIVEL).toUpperCase() === 'ADMIN';
+    if (admin) {
+      try {
+        configurarGatilhoNotificacoesMapro_();
+      } catch (erroGatilho) {
+        console.error(JSON.stringify({
+          acao: 'FALHA_CONFIGURACAO_GATILHO_NOTIFICACOES',
+          erro: erroGatilho && erroGatilho.message
+        }));
+      }
+    }
+    const mapros = obterMaprosAcessiveis_(usuario, admin);
+    const atividades = lerRegistros_(
+      obterAbaMaproAtividades_(), CABECALHOS_MAPRO_ATIVIDADES
+    );
+    const porMapro = agruparAtividadesPorMapro_(atividades);
+    return {
+      configuracao: montarConfiguracaoPaginaMapros_(usuario, admin, mapros),
+      mapros: {
+        sucesso: true,
+        dados: mapros.map(function (mapro) {
+          return mapearResumoMapro_(
+            mapro, porMapro[String(Number(mapro.ID_MAPRO))] || []
+          );
+        }).sort(function (a, b) { return Number(a.idMapro) - Number(b.idMapro); })
+      }
+    };
+  } catch (erro) {
+    return { configuracao: respostaDeErro_(erro), mapros: null };
+  }
+}
+
+function montarConfiguracaoPaginaMapros_(usuario, admin, mapros) {
+  const portfolios = Array.from(new Set(mapros.map(function (mapro) {
+    return String(mapro['PORTFÓLIO'] || '').trim();
+  }).filter(Boolean))).sort(function (a, b) { return a.localeCompare(b, 'pt-BR'); });
   return {
-    configuracao: configuracao,
-    mapros: configuracao.sucesso ? listarMaprosPagina('') : null
+    sucesso: true,
+    dados: {
+      admin: admin,
+      titulo: admin ? 'MAPROS' : 'MINHAS MAPROS',
+      usuario: {
+        id: formatarId_(Number(usuario.ID)),
+        nome: String(usuario.NOME || ''),
+        email: normalizarEmail_(usuario.EMAIL)
+      },
+      portfolios: portfolios,
+      logoUrl: 'https://drive.google.com/thumbnail?id=' + CONFIG.logoCadastroId + '&sz=w4000',
+      logoEmpresaUrl: 'https://drive.google.com/thumbnail?id=' + CONFIG.logoEmpresaId + '&sz=w600',
+      urlAplicacao: ScriptApp.getService().getUrl()
+    }
   };
 }
 
@@ -502,7 +532,7 @@ function obterDetalhesMapro(idMapro) {
     const detalhesMapro = mapearDetalhesMapro_(mapro);
     detalhesMapro.dataInicio = resumoAtividades.dataInicio;
     detalhesMapro.dataFinal = resumoAtividades.dataFinal;
-    const participantes = obterParticipantesAtivosMapro_(mapro.ID_MAPRO);
+    const participantes = contexto.participantes;
     const usuarios = lerRegistros_(obterAbaUsuarios_(), CABECALHOS_USUARIOS)
       .filter(function (item) { return String(item.STATUS).toUpperCase() === 'ATIVO'; })
       .map(function (item) {
@@ -1004,6 +1034,8 @@ function salvarEdicoesAtividadesMapro(dados) {
 
     const aba = obterAbaMaproAtividades_();
     const registros = lerRegistros_(aba, CABECALHOS_MAPRO_ATIVIDADES);
+    const quantidadeRegistrosOriginais = registros.length;
+    const assinaturasOriginais = registros.map(assinarRegistroAtividadeMapro_);
     const idsNovosPorCliente = {};
     recebidas.forEach(function (dadosAtividade) {
       const idServidor = String(dadosAtividade.idAtividade || '').trim();
@@ -1023,7 +1055,7 @@ function salvarEdicoesAtividadesMapro(dados) {
       }
     });
     const responsaveisPermitidos = {};
-    obterParticipantesAtivosMapro_(idMapro).forEach(function (participante) {
+    contexto.participantes.forEach(function (participante) {
       if (['LIDER', 'EDITOR', 'OBSERVADOR'].indexOf(participante.papel) !== -1) {
         responsaveisPermitidos[String(Number(participante.id))] = true;
       }
@@ -1152,12 +1184,13 @@ function salvarEdicoesAtividadesMapro(dados) {
       );
     });
 
-    aba.getRange(2, 1, registros.length, CABECALHOS_MAPRO_ATIVIDADES.length).setValues(
-      registros.map(function (registro) {
-        return CABECALHOS_MAPRO_ATIVIDADES.map(function (cabecalho) {
-          return registro[cabecalho] == null ? '' : registro[cabecalho];
-        });
-      })
+    const registrosDaMapro = registros.filter(function (atividade) {
+      return idsIguaisMapro_(atividade.ID_MAPRO, idMapro) &&
+        String(atividade.ATIVO || 'SIM').toUpperCase() !== 'NAO';
+    });
+    agregarTopicosMapro_(registrosDaMapro);
+    persistirAtividadesAlteradasMapro_(
+      aba, registros, quantidadeRegistrosOriginais, assinaturasOriginais
     );
     if (historicos.length) {
       const abaHistorico = obterAbaMaproHistoricoDatas_();
@@ -1166,13 +1199,9 @@ function salvarEdicoesAtividadesMapro(dados) {
       ).setValues(historicos);
     }
     const resumoProjeto = atualizarResumoPersistidoMapro_(
-      idMapro, contexto.usuario.EMAIL, registros
+      idMapro, contexto.usuario.EMAIL, registros,
+      { atividadesJaAgregadas: true, persistirAtividades: false }
     );
-    const registrosDaMapro = registros.filter(function (atividade) {
-      return idsIguaisMapro_(atividade.ID_MAPRO, idMapro) &&
-        String(atividade.ATIVO || 'SIM').toUpperCase() !== 'NAO';
-    });
-    agregarTopicosMapro_(registrosDaMapro);
     const atividadesCliente = registrosDaMapro.map(function (atividade) {
       const mapeada = mapearAtividadeMaproParaCliente_(atividade);
       mapeada.idAtividadeCliente = idsClientePorServidor[mapeada.idAtividade] || mapeada.idAtividade;
@@ -1218,6 +1247,9 @@ function anexarEvidenciaAtividadeMapro(dados) {
     const nomeOriginal = String(entrada.nome || '').trim();
     if (!nomeOriginal) throw new Error('O arquivo precisa possuir um nome válido.');
     const tipo = String(entrada.tipo || 'application/octet-stream').trim().slice(0, 150);
+    const extensaoEncontrada = nomeOriginal.match(/(\.[A-Za-z0-9]{1,10})$/);
+    const extensao = extensaoEncontrada ? extensaoEncontrada[1].toLowerCase() : '';
+    validarArquivoEvidenciaMapro_(extensao, tipo);
     const conteudoBase64 = String(entrada.conteudoBase64 || '').replace(/\s/g, '');
     if (!/^[A-Za-z0-9+/]*={0,2}$/.test(conteudoBase64)) {
       throw new Error('O conteúdo do arquivo é inválido.');
@@ -1246,8 +1278,6 @@ function anexarEvidenciaAtividadeMapro(dados) {
     validarVersaoAtividadeMapro_(atual, Number(entrada.version || 0));
     const registros = lerRegistros_(aba, CABECALHOS_MAPRO_ATIVIDADES);
     const numeroAtividade = calcularNumeracaoAtividadeMapro_(registros, idAtividade) || 'sem-numero';
-    const extensaoEncontrada = nomeOriginal.match(/(\.[A-Za-z0-9]{1,10})$/);
-    const extensao = extensaoEncontrada ? extensaoEncontrada[1].toLowerCase() : '';
     const nomePadrao = [
       formatarId_(Number(contexto.mapro.ID_MAPRO)),
       normalizarNomeProjeto_(contexto.mapro.NOME_PROJETO),
@@ -1296,6 +1326,30 @@ function anexarEvidenciaAtividadeMapro(dados) {
     return respostaDeErro_(erro);
   } finally {
     if (bloqueio.hasLock()) bloqueio.releaseLock();
+  }
+}
+
+/** Bloqueia conteúdo ativo/executável e mantém os formatos corporativos usuais. */
+function validarArquivoEvidenciaMapro_(extensao, tipo) {
+  const extensoesPermitidas = [
+    '.png', '.jpg', '.jpeg', '.webp', '.pdf', '.doc', '.docx',
+    '.xls', '.xlsx', '.ppt', '.pptx', '.csv', '.txt'
+  ];
+  const tiposPermitidos = [
+    'image/png', 'image/jpeg', 'image/webp', 'application/pdf',
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.ms-excel',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'application/vnd.ms-powerpoint',
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    'text/csv', 'text/plain', 'application/octet-stream'
+  ];
+  if (extensoesPermitidas.indexOf(String(extensao || '').toLowerCase()) === -1 ||
+      tiposPermitidos.indexOf(String(tipo || '').toLowerCase()) === -1) {
+    throw new Error(
+      'Formato de evidência não permitido. Use imagem, PDF, Word, Excel, PowerPoint, CSV ou TXT.'
+    );
   }
 }
 
@@ -1361,6 +1415,7 @@ function obterPastaFotosLideresMapro_() {
  * Execute manualmente pelo seletor de funções usando a conta SGI.
  */
 function autorizarAcessoPastaFotosLideres() {
+  exigirAdministradorConfiguracao_();
   const pasta = obterPastaFotosLideresMapro_();
   return 'Acesso autorizado à pasta de fotos dos líderes: ' + pasta.getName();
 }
@@ -2020,7 +2075,8 @@ function exigirAcessoMapro_(idMapro) {
   if (!linha) throw new Error('Mapro não encontrada.');
   const mapro = lerRegistroDaLinha_(aba, linha, CABECALHOS_MAPROS);
   const email = normalizarEmail_(usuario.EMAIL);
-  const vinculo = obterParticipantesAtivosMapro_(idMapro).find(function (item) {
+  const participantes = obterParticipantesAtivosMapro_(idMapro);
+  const vinculo = participantes.find(function (item) {
     return normalizarEmail_(item.email) === email;
   });
   const usuarioLider = email === normalizarEmail_(mapro['EMAIL_LÍDER']);
@@ -2039,6 +2095,7 @@ function exigirAcessoMapro_(idMapro) {
     admin: admin,
     mapro: mapro,
     linha: linha,
+    participantes: participantes,
     papel: papel,
     podeIniciarAcompanhamento: podeIniciarAcompanhamento,
     podeEditarTudo: ['ADMIN', 'LIDER', 'EDITOR'].indexOf(papel) !== -1,
@@ -2113,9 +2170,24 @@ function mapearDetalhesMapro_(mapro) {
     acompanhamentoIniciado: Boolean(mapro.ACOMPANHAMENTO_INICIADO_EM),
     acompanhamentoIniciadoEm: String(mapro.ACOMPANHAMENTO_INICIADO_EM || ''),
     version: Number(mapro.VERSION || 1),
-    fotoLider: obterFotoLiderMaproParaCliente_(mapro)
+    possuiFotoLider: Boolean(String(mapro.FOTO_LIDER_ID || '').trim()),
+    fotoLider: ''
   };
   return detalhes;
+}
+
+/** Carrega a imagem separadamente para não bloquear a abertura do projeto. */
+function obterFotoLiderMapro(idMapro) {
+  try {
+    garantirBancoConfigurado_();
+    const contexto = exigirAcessoMapro_(idMapro);
+    return {
+      sucesso: true,
+      dados: { imagem: obterFotoLiderMaproParaCliente_(contexto.mapro) }
+    };
+  } catch (erro) {
+    return respostaDeErro_(erro);
+  }
 }
 
 function obterFotoLiderMaproParaCliente_(mapro) {
@@ -2491,8 +2563,15 @@ function calcularSaudeAtividadeMapro_(atividade) {
 }
 
 function obterBasesMapro_() {
+  const chaveCache = 'BASES_MAPRO_V1';
+  try {
+    const armazenado = CacheService.getScriptCache().get(chaveCache);
+    if (armazenado) return JSON.parse(armazenado);
+  } catch (erroCache) {
+    console.warn('Cache das bases Mapro indisponível: ' + erroCache.message);
+  }
   const planilha = obterPlanilha_();
-  return {
+  const bases = {
     contagiros: lerValoresBaseMapro_(
       planilha.getSheetByName(CONFIG.abaBaseContagiro),
       'CONTAGIRO'
@@ -2516,6 +2595,12 @@ function obterBasesMapro_() {
       };
     })
   };
+  try {
+    CacheService.getScriptCache().put(chaveCache, JSON.stringify(bases), 300);
+  } catch (erroCache) {
+    console.warn('Não foi possível atualizar o cache das bases Mapro: ' + erroCache.message);
+  }
+  return bases;
 }
 
 function validarAtividadeMapro_(dados) {
@@ -2769,7 +2854,9 @@ function propagarPrazoPredecessoraMapro_(
   return alteradas;
 }
 
-function atualizarResumoPersistidoMapro_(idMapro, email, registrosAtividadesCarregados) {
+function atualizarResumoPersistidoMapro_(
+  idMapro, email, registrosAtividadesCarregados, opcoes
+) {
   const abaMapros = obterAbaMapros_();
   const linha = buscarLinhaMaproPorId_(abaMapros, idMapro);
   const mapro = lerRegistroDaLinha_(abaMapros, linha, CABECALHOS_MAPROS);
@@ -2779,8 +2866,9 @@ function atualizarResumoPersistidoMapro_(idMapro, email, registrosAtividadesCarr
     : lerRegistros_(abaAtividades, CABECALHOS_MAPRO_ATIVIDADES);
   const atividades = todasAtividades
     .filter(function (atividade) { return idsIguaisMapro_(atividade.ID_MAPRO, idMapro); });
-  agregarTopicosMapro_(atividades);
-  if (todasAtividades.length) {
+  const configuracao = opcoes || {};
+  if (!configuracao.atividadesJaAgregadas) agregarTopicosMapro_(atividades);
+  if (configuracao.persistirAtividades !== false && todasAtividades.length) {
     const agregadasPorId = {};
     atividades.forEach(function (atividade) {
       agregadasPorId[String(atividade.ID_ATIVIDADE)] = atividade;
@@ -2825,6 +2913,50 @@ function atualizarResumoPersistidoMapro_(idMapro, email, registrosAtividadesCarr
     atividadesEmAtraso: resumo.atividadesEmAtraso,
     atividadesNaoAplicaveis: resumo.atividadesNaoAplicaveis
   };
+}
+
+function mapearLinhaAtividadeMapro_(registro) {
+  return CABECALHOS_MAPRO_ATIVIDADES.map(function (cabecalho) {
+    return registro[cabecalho] == null ? '' : registro[cabecalho];
+  });
+}
+
+function assinarRegistroAtividadeMapro_(registro) {
+  return JSON.stringify(mapearLinhaAtividadeMapro_(registro));
+}
+
+/** Escreve somente as linhas realmente alteradas e agrupa intervalos contíguos. */
+function persistirAtividadesAlteradasMapro_(
+  aba, registros, quantidadeOriginais, assinaturasOriginais
+) {
+  const alterados = [];
+  for (let indice = 0; indice < quantidadeOriginais; indice += 1) {
+    if (assinarRegistroAtividadeMapro_(registros[indice]) !== assinaturasOriginais[indice]) {
+      alterados.push(indice);
+    }
+  }
+  let inicioGrupo = 0;
+  while (inicioGrupo < alterados.length) {
+    let fimGrupo = inicioGrupo;
+    while (fimGrupo + 1 < alterados.length &&
+        alterados[fimGrupo + 1] === alterados[fimGrupo] + 1) {
+      fimGrupo += 1;
+    }
+    const primeiroIndice = alterados[inicioGrupo];
+    const ultimoIndice = alterados[fimGrupo];
+    const linhas = registros.slice(primeiroIndice, ultimoIndice + 1)
+      .map(mapearLinhaAtividadeMapro_);
+    aba.getRange(
+      primeiroIndice + 2, 1, linhas.length, CABECALHOS_MAPRO_ATIVIDADES.length
+    ).setValues(linhas);
+    inicioGrupo = fimGrupo + 1;
+  }
+  if (registros.length > quantidadeOriginais) {
+    const novasLinhas = registros.slice(quantidadeOriginais).map(mapearLinhaAtividadeMapro_);
+    aba.getRange(
+      quantidadeOriginais + 2, 1, novasLinhas.length, CABECALHOS_MAPRO_ATIVIDADES.length
+    ).setValues(novasLinhas);
+  }
 }
 
 function calcularSituacaoProjetoMapro_(situacaoAtual, atividades) {
@@ -3089,9 +3221,14 @@ function calcularSemanaUtilMapro_(dataIso) {
 }
 
 function configurarGatilhoNotificacoesMapro_() {
-  const funcao = 'enviarNotificacoesAtividadesMapro';
-  const existe = ScriptApp.getProjectTriggers().some(function (gatilho) {
-    return gatilho.getHandlerFunction() === funcao;
+  const funcao = 'enviarNotificacoesAtividadesMapro_';
+  let existe = false;
+  ScriptApp.getProjectTriggers().forEach(function (gatilho) {
+    const manipulador = gatilho.getHandlerFunction();
+    if (manipulador === funcao) existe = true;
+    if (manipulador === 'enviarNotificacoesAtividadesMapro') {
+      ScriptApp.deleteTrigger(gatilho);
+    }
   });
   if (!existe) {
     ScriptApp.newTrigger(funcao).timeBased().everyDays(1).atHour(8)
@@ -3099,7 +3236,14 @@ function configurarGatilhoNotificacoesMapro_() {
   }
 }
 
-function enviarNotificacoesAtividadesMapro() {
+/** Execução manual protegida para diagnóstico administrativo. */
+function executarNotificacoesAtividadesMapro() {
+  exigirAdministrador_();
+  return enviarNotificacoesAtividadesMapro_();
+}
+
+/** Handler privado do gatilho; não pode ser chamado pelo navegador. */
+function enviarNotificacoesAtividadesMapro_() {
   garantirBancoConfigurado_();
   const agora = new Date();
   const hoje = Utilities.formatDate(agora, 'America/Sao_Paulo', 'yyyy-MM-dd');

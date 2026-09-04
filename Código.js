@@ -136,6 +136,15 @@ function serializarDadosIniciais_(dados) {
 
 /** Permite incluir os arquivos CSS e JavaScript dentro do Index.html. */
 function incluir(nomeArquivo) {
+  const arquivosPermitidos = [
+    'Styles', 'Carregamento', 'ComponentesJS', 'JavaScript',
+    'cadastrosDeUsuariosJS', 'solicitacoesCabecalhoCSS',
+    'solicitacoesDeMaproJS', 'maprosCSS', 'maprosJS',
+    'DashboardCSS', 'DashboardJS'
+  ];
+  if (arquivosPermitidos.indexOf(String(nomeArquivo || '')) === -1) {
+    throw new Error('Arquivo de interface não permitido.');
+  }
   return HtmlService.createHtmlOutputFromFile(nomeArquivo).getContent();
 }
 
@@ -144,6 +153,12 @@ function incluir(nomeArquivo) {
  * Cria as abas do banco na planilha vinculada e cadastra a conta SGI.
  */
 function configurarBancoDeDados() {
+  exigirAdministradorConfiguracao_();
+  return configurarBancoDeDados_();
+}
+
+/** Mantém a rotina de migração inacessível ao cliente do Web App. */
+function configurarBancoDeDados_() {
   const planilha = obterPlanilha_();
   const abaUsuarios = criarOuAtualizarAba_(
     planilha,
@@ -221,7 +236,14 @@ function garantirBancoConfigurado_() {
   } catch (erroCache) {
     console.warn('Cache da estrutura indisponível: ' + erroCache.message);
   }
-  configurarBancoDeDados();
+  configurarBancoDeDados_();
+}
+
+/** Autoriza a configuração inicial somente para a conta SGI ou um ADMIN ativo. */
+function exigirAdministradorConfiguracao_() {
+  const email = obterEmailUsuario_();
+  if (email === normalizarEmail_(CONFIG.emailAdministrador)) return;
+  exigirAdministrador_();
 }
 
 /** Retorna os dados necessários para montar a tela inicial. */

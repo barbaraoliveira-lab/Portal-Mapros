@@ -367,9 +367,24 @@
       document.getElementById('carregando-detalhe-mapro').hidden = true;
       document.getElementById('conteudo-detalhe-mapro').hidden = false;
       agendarCabecalhoFixoAtividadesMapro();
+      carregarFotoLiderMapro(idMapro);
     } finally {
       MaproUI.hideLoading();
     }
+  }
+
+  function carregarFotoLiderMapro(idMapro) {
+    const detalheAtual = estadoMapros.detalhe;
+    if (!detalheAtual || !detalheAtual.mapro || !detalheAtual.mapro.possuiFotoLider) return;
+    chamarServidorMapros('obterFotoLiderMapro', idMapro).then(function (resposta) {
+      if (!resposta.sucesso || !resposta.dados) return;
+      if (!estadoMapros.detalhe ||
+          String(estadoMapros.detalhe.mapro.idMapro) !== String(idMapro)) return;
+      estadoMapros.detalhe.mapro.fotoLider = resposta.dados.imagem || '';
+      exibirFotoLiderMapro(estadoMapros.detalhe.mapro.fotoLider);
+    }).catch(function (erro) {
+      console.warn('A foto do líder não pôde ser carregada.', erro);
+    });
   }
 
   function sincronizarDepartamentosCadastradosMapro() {
@@ -2221,6 +2236,17 @@
 
   function anexarEvidenciaAtividadeMapro(atividade, arquivo, botao) {
     if (!arquivo) return;
+    const extensao = String(arquivo.name || '').toLowerCase().match(/\.[a-z0-9]{1,10}$/);
+    const permitidas = [
+      '.png', '.jpg', '.jpeg', '.webp', '.pdf', '.doc', '.docx',
+      '.xls', '.xlsx', '.ppt', '.pptx', '.csv', '.txt'
+    ];
+    if (!extensao || permitidas.indexOf(extensao[0]) === -1) {
+      mostrarAvisoMapros(
+        'Use uma imagem, PDF, Word, Excel, PowerPoint, CSV ou TXT.', true
+      );
+      return;
+    }
     if (arquivo.size > 20 * 1024 * 1024) {
       mostrarAvisoMapros('A evidência deve possuir no máximo 20 MB.', true);
       return;

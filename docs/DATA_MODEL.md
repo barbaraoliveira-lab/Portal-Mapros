@@ -84,8 +84,10 @@ pasta cujo ID é mantido na Script Property `MAPRO_EVIDENCIAS_FOLDER_ID` (com o
 valor central de configuração como fallback). A conta efetiva da implantação do
 Web App precisa possuir permissão de Editor nessa pasta. Se a propriedade ainda não
 existir, a aplicação usa o ID central configurado e o registra após validar o acesso.
-O upload aceita qualquer tipo de arquivo até 20 MB. Como o backend cria e administra
-a pasta de evidências com `DriveApp`, o manifesto usa o escopo OAuth `drive`.
+O upload aceita imagens PNG/JPG/WEBP, PDF, Word, Excel, PowerPoint, CSV e TXT, com limite
+de 20 MB. A extensão e o MIME declarado são validados novamente no servidor; conteúdo
+ativo ou executável não é aceito. Como o backend cria e administra a pasta de evidências
+com `DriveApp`, o manifesto usa o escopo OAuth `drive`.
 
 A migration de cabeçalhos é idempotente: as colunas de evidência são acrescentadas
 sem remover ou reposicionar os dados existentes.

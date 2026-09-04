@@ -37,6 +37,10 @@ vínculo do líder não pode ser removido por essa operação.
 As regras são revalidadas nas funções do servidor. O estado dos controles no navegador
 serve apenas para orientar a experiência e não substitui a autorização do backend.
 
+As rotinas públicas de configuração do banco e de autorização da pasta de fotos aceitam
+somente a conta SGI configurada ou um `ADMIN` ativo. A implementação interna termina com
+`_` e não fica disponível para chamadas feitas pelo navegador via `google.script.run`.
+
 As respostas de processo crítico, envolvimento de sistema e a descrição dos sistemas fazem
 parte do cabeçalho. Portanto, participantes com vínculo `EDITOR` podem atualizá-las; o
 servidor aplica a mesma autorização usada nos demais campos do cabeçalho.
