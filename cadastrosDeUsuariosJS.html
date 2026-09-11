@@ -7,6 +7,7 @@
   let usuarioSelecionado = null;
   let filtrosAtuais = {};
   let departamentosDisponiveis = [];
+  let areasRelacionadasDisponiveis = [];
 
   function mostrarAviso(mensagem, falha) {
     const aviso = document.getElementById('aviso');
@@ -24,13 +25,17 @@
       processarAcessoUsuarios(
         inicial.sistema,
         inicial.usuarios || null,
-        inicial.departamentos || []
+        inicial.departamentos || [],
+        inicial.areasRelacionadas || []
       );
       return;
     }
     google.script.run
       .withSuccessHandler(function (pacote) {
-        processarAcessoUsuarios(pacote.sistema, pacote.usuarios, pacote.departamentos || []);
+        processarAcessoUsuarios(
+          pacote.sistema, pacote.usuarios, pacote.departamentos || [],
+          pacote.areasRelacionadas || []
+        );
       })
       .withFailureHandler(function () {
         MaproUI.hideLoading();
@@ -39,7 +44,9 @@
       .carregarPaginaUsuariosInicial();
   }
 
-  function processarAcessoUsuarios(respostaSistema, respostaUsuarios, departamentos) {
+  function processarAcessoUsuarios(
+    respostaSistema, respostaUsuarios, departamentos, areasRelacionadas
+  ) {
     if (!respostaSistema.sucesso || !respostaSistema.dados.acesso ||
         respostaSistema.dados.nivel !== 'ADMIN') {
       MaproUI.hideLoading();
@@ -51,7 +58,9 @@
     }
     urlAplicacao = respostaSistema.dados.urlAplicacao;
     departamentosDisponiveis = departamentos || [];
+    areasRelacionadasDisponiveis = areasRelacionadas || [];
     preencherMenuDepartamentoUsuario();
+    preencherAreasRelacionadasUsuario();
     if (respostaUsuarios) {
       aplicarRespostaUsuarios(respostaUsuarios, filtrosAtuais);
       return;
@@ -198,6 +207,41 @@
     });
   }
 
+  function preencherAreasRelacionadasUsuario(selecionadas) {
+    const lista = document.getElementById('opcoes-areas-relacionadas-usuario');
+    const marcadas = (selecionadas || []).map(normalizarPesquisaUsuario_);
+    lista.replaceChildren();
+    areasRelacionadasDisponiveis.forEach(function (area, indice) {
+      const label = document.createElement('label');
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.name = 'areasRelacionadas';
+      checkbox.value = area;
+      checkbox.id = 'area-relacionada-' + indice;
+      checkbox.checked = marcadas.indexOf(normalizarPesquisaUsuario_(area)) !== -1;
+      const texto = document.createElement('span');
+      texto.textContent = area;
+      label.append(checkbox, texto);
+      lista.appendChild(label);
+    });
+  }
+
+  function atualizarCampoAreasRelacionadasUsuario() {
+    const nivel = document.getElementById('usuario-nivel').value;
+    const visivel = nivel === 'GERENTE' || nivel === 'DIRETOR';
+    const campo = document.getElementById('campo-areas-relacionadas-usuario');
+    campo.hidden = !visivel;
+    campo.querySelectorAll('input[type="checkbox"]').forEach(function (checkbox) {
+      checkbox.disabled = !visivel;
+    });
+  }
+
+  function obterAreasRelacionadasSelecionadasUsuario() {
+    return Array.from(document.querySelectorAll(
+      '#opcoes-areas-relacionadas-usuario input[type="checkbox"]:checked'
+    )).map(function (checkbox) { return checkbox.value; });
+  }
+
   function abrirMenuDepartamentoUsuario() {
     const campo = document.getElementById('usuario-departamento');
     const lista = document.getElementById('opcoes-usuario-departamento');
@@ -326,6 +370,7 @@
       adicionarCelula(linha, usuario.email);
       adicionarCelula(linha, usuario.matricula);
       adicionarCelula(linha, usuario.departamento);
+      adicionarCelula(linha, (usuario.areasRelacionadas || []).join('; '));
       adicionarCelula(linha, formatarNivel(usuario.nivel));
 
       const celulaStatus = document.createElement('td');
@@ -364,7 +409,10 @@
   }
 
   function formatarNivel(nivel) {
-    return { ADMIN: 'ADMINISTRADOR', PARTICIPANTE: 'PARTICIPANTE' }[nivel] || nivel;
+    return {
+      ADMIN: 'ADMINISTRADOR', PARTICIPANTE: 'PARTICIPANTE',
+      GERENTE: 'GERENTE', DIRETOR: 'DIRETOR'
+    }[nivel] || nivel;
   }
 
   function formatarData(valor) {
@@ -400,6 +448,8 @@
     formulario.reset();
     document.getElementById('usuario-id').value = '';
     document.getElementById('usuario-status').value = 'ATIVO';
+    preencherAreasRelacionadasUsuario([]);
+    atualizarCampoAreasRelacionadasUsuario();
     document.getElementById('titulo-modal-usuario').textContent = 'CADASTRAR USUÁRIO';
     document.getElementById('salvar-usuario').textContent = 'CADASTRAR';
     abrirModal('modal-usuario');
@@ -414,6 +464,8 @@
     document.getElementById('usuario-departamento').value = usuarioSelecionado.departamento;
     document.getElementById('usuario-nivel').value = usuarioSelecionado.nivel;
     document.getElementById('usuario-status').value = usuarioSelecionado.status;
+    preencherAreasRelacionadasUsuario(usuarioSelecionado.areasRelacionadas || []);
+    atualizarCampoAreasRelacionadasUsuario();
     document.getElementById('titulo-modal-usuario').textContent = 'EDITAR USUÁRIO';
     document.getElementById('salvar-usuario').textContent = 'EDITAR';
     abrirModal('modal-usuario');
@@ -429,6 +481,7 @@
       nome: document.getElementById('usuario-nome').value,
       email: document.getElementById('usuario-email').value,
       departamento: document.getElementById('usuario-departamento').value,
+      areasRelacionadas: obterAreasRelacionadasSelecionadasUsuario(),
       nivel: document.getElementById('usuario-nivel').value,
       status: document.getElementById('usuario-status').value
     };
@@ -522,12 +575,14 @@
   function baixarCsv() {
     if (!usuariosExibidos.length) return mostrarAviso('Não há usuários para exportar.', true);
     const linhas = [[
-      'ID', 'NOME', 'EMAIL', 'MATRICULA', 'DEPARTAMENTO', 'NIVEL', 'STATUS', 'ATUALIZADO_EM'
+      'ID', 'NOME', 'EMAIL', 'MATRICULA', 'DEPARTAMENTO', 'AREAS_RELACIONADAS',
+      'NIVEL', 'STATUS', 'ATUALIZADO_EM'
     ]];
     usuariosExibidos.forEach(function (usuario) {
       linhas.push([
         usuario.id, usuario.nome, usuario.email, usuario.matricula,
-        usuario.departamento, usuario.nivel, usuario.status, formatarData(usuario.atualizadoEm)
+        usuario.departamento, (usuario.areasRelacionadas || []).join('; '),
+        usuario.nivel, usuario.status, formatarData(usuario.atualizadoEm)
       ]);
     });
     const csv = '\uFEFF' + linhas.map(function (linha) {
@@ -555,6 +610,8 @@
   });
   document.getElementById('limpar-filtros').addEventListener('click', limparFiltros);
   document.getElementById('formulario-usuario').addEventListener('submit', salvarFormularioUsuario);
+  document.getElementById('usuario-nivel')
+    .addEventListener('change', atualizarCampoAreasRelacionadasUsuario);
   document.getElementById('formulario-filtros').addEventListener('submit', pesquisarUsuarios);
   document.getElementById('confirmar-exclusao').addEventListener('click', confirmarExclusaoUsuario);
   document.querySelectorAll('[data-fechar-modal]').forEach(function (botao) {

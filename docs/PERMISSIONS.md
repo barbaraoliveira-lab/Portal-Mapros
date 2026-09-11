@@ -2,9 +2,12 @@
 
 - `ADMIN`: acesso e edição total.
 - `LIDER`: edição total e gestão dos participantes relacionados ao projeto.
-- `EDITOR`: edição do cabeçalho e de todas as atividades, inclusive inclusão, exclusão e movimentação.
+- `EDITOR`: edição do cabeçalho e de todas as atividades, inclusive inclusão, exclusão,
+  movimentação e gestão dos participantes relacionados ao projeto.
 - `OBSERVADOR`: consulta do projeto e edição apenas das atividades sob sua responsabilidade; não exclui, cria ou move itens.
 - `ACESSO`: consulta da Mapro em “Minhas Mapros”, sem permissão de edição ou atribuição como responsável.
+- `ACESSO_AREA`: permissão de consulta calculada no servidor para usuários `GERENTE` ou
+  `DIRETOR` quando uma atividade-folha pertence a uma de suas áreas relacionadas.
 
 Os participantes iniciais da solicitação recebem vínculo `ACESSO` quando a Mapro é
 aprovada. Esse vínculo aparece marcado no gerenciamento de participantes e pode ser
@@ -26,16 +29,36 @@ mensagem informa que a Mapro está apta para acompanhamento na Contagiro designa
 inclui um link direto para o projeto. Falhas individuais de envio são registradas sem
 reverter a abertura já confirmada.
 
+Quando a situação consolidada muda pela primeira vez para concluída, os vínculos ativos
+do projeto recebem um e-mail de encerramento com os dados do cabeçalho, a quantidade de
+atividades/subatividades, o tempo decorrido e um link direto para a Mapro.
+
 O solicitante da Mapro é relacionado automaticamente ao projeto como `EDITOR`, inclusive
 quando também é o líder. A migração de estrutura promove os vínculos de solicitantes das
 Mapros existentes. Ser líder, isoladamente, não autoriza iniciar o acompanhamento: é
 necessário possuir vínculo ativo de `EDITOR` ou ser `ADMIN`.
 
-O líder do projeto e o `ADMIN` podem revogar vínculos `EDITOR` e `OBSERVADOR`. O
-vínculo do líder não pode ser removido por essa operação.
+Ao inativar um usuário, atividades abertas sob sua responsabilidade têm o vínculo de
+responsável e o departamento removidos para permitir nova atribuição. Itens já concluídos
+ou não aplicáveis preservam o nome original para auditoria. O líder de cada Mapro afetada
+recebe um e-mail com as atividades pendentes e um botão para abrir o projeto. Os vínculos
+ativos do usuário com projetos também são desativados e não são reativados pelas migrações.
+
+O líder do projeto, um participante `EDITOR`, o `ADMIN`, o `GERENTE` e o `DIRETOR`
+com acesso à Mapro podem relacionar participantes e revogar vínculos `EDITOR` e
+`OBSERVADOR`. O vínculo do líder não pode ser removido por essa operação.
 
 As regras são revalidadas nas funções do servidor. O estado dos controles no navegador
 serve apenas para orientar a experiência e não substitui a autorização do backend.
+
+Gerentes e diretores podem visualizar a Mapro e seus indicadores quando ao menos uma
+atividade ou subatividade-folha possui departamento cadastrado em suas áreas relacionadas.
+Esse acesso por área não os transforma em participantes, não autoriza a edição do conteúdo
+da Mapro e não os inclui em e-mails, mas permite gerenciar os participantes relacionados.
+Eles recebem avisos somente quando forem relacionados ao projeto com papel ativo e
+atribuídos como responsáveis, seguindo as mesmas regras dos demais participantes.
+Mapros canceladas permanecem acessíveis apenas ao `ADMIN`, inclusive quando havia vínculo
+anterior ou acesso por área.
 
 As rotinas públicas de configuração do banco e de autorização da pasta de fotos aceitam
 somente a conta SGI configurada ou um `ADMIN` ativo. A implementação interna termina com
@@ -52,7 +75,8 @@ operação também atualiza imediatamente as opções de responsável na página
 Quando um participante cria uma nova solicitação de Mapro, o endereço administrativo
 central do SGI recebe um aviso por e-mail sem os dados da solicitação. Edições posteriores
 não repetem o aviso. Falhas no serviço de e-mail são registradas nos logs e não revertem
-a solicitação já persistida.
+a solicitação já persistida. O aviso contém um botão direto para a página administrativa
+de solicitações.
 
 Quando uma conta ainda não cadastrada solicita acesso ao portal, o SGI recebe um e-mail
 com o endereço solicitado, a data e o protocolo gerado. O conteúdo possui versões HTML

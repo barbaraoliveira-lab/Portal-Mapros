@@ -2,7 +2,7 @@ const CONFIG = {
   nomeSistema: 'MAPRO',
   emailAdministrador: 'sgi@integrajca.com.br',
   corPrincipal: '#030441',
-  versaoEstrutura: '2026-09-02-01',
+  versaoEstrutura: '2026-09-11-02',
   logoCarregamentoId: '1xu3olDb4OIgL2QzIKreygYr-J_oC3cv3',
   logoId: '1KZzCBGZF8UV4s-Lk9XG9GzkHUuOh5UfN',
   logoEmpresaId: '1lh2A0JeKyfEmf3rDfJvLy32FLcInxza5',
@@ -29,7 +29,7 @@ const CONFIG = {
 
 const CABECALHOS_USUARIOS = [
   'ID', 'EMAIL', 'NOME', 'NIVEL', 'STATUS', 'CRIADO_EM', 'ATUALIZADO_EM',
-  'MATRICULA', 'DEPARTAMENTO'
+  'MATRICULA', 'DEPARTAMENTO', 'AREAS_RELACIONADAS'
 ];
 
 let bancoConfiguradoNestaExecucao_ = false;
@@ -61,6 +61,7 @@ const CABECALHOS_MAPROS = [
   'SISTEMAS_ENVOLVIDOS',
   'INICIADA_EM', 'INICIADA_POR', 'MOTIVO_CANCELAMENTO', 'VERSION',
   'ACOMPANHAMENTO_INICIADO_EM', 'ACOMPANHAMENTO_INICIADO_POR',
+  'CONCLUIDA_EM',
   'FOTO_LIDER_ID', 'FOTO_LIDER_TIPO', 'FOTO_LIDER_ATUALIZADA_EM',
   'FOTO_LIDER_ATUALIZADA_POR'
 ];
@@ -112,7 +113,8 @@ function carregarPaginaUsuariosInicial() {
   return {
     sistema: sistema,
     usuarios: administrador ? listarUsuarios({}) : null,
-    departamentos: administrador ? listarDepartamentosCadastroUsuarios_() : []
+    departamentos: administrador ? listarDepartamentosCadastroUsuarios_() : [],
+    areasRelacionadas: administrador ? listarAreasRelacionadasCadastroUsuarios_() : []
   };
 }
 
@@ -192,6 +194,7 @@ function configurarBancoDeDados_() {
       'ATIVO',
       agora,
       agora,
+      '',
       '',
       ''
     ]);
@@ -316,10 +319,14 @@ function listarUsuarios(filtros) {
 /** Cadastra ou edita um usuário. */
 function salvarUsuario(dados) {
   const bloqueio = LockService.getDocumentLock();
+  let avisosInativacao = [];
   try {
     const administrador = exigirAdministrador_();
     const usuario = validarDadosUsuario_(dados);
     usuario.departamento = validarDepartamentoUsuario_(usuario.departamento);
+    usuario.areasRelacionadas = validarAreasRelacionadasUsuario_(
+      usuario.areasRelacionadas, usuario.nivel
+    );
     bloqueio.waitLock(10000);
 
     const aba = obterAbaUsuarios_();
@@ -358,8 +365,12 @@ function salvarUsuario(dados) {
         atual.CRIADO_EM,
         agora,
         protegerTextoPlanilha_(usuario.matricula),
-        protegerTextoPlanilha_(usuario.departamento)
+        protegerTextoPlanilha_(usuario.departamento),
+        protegerTextoPlanilha_(usuario.areasRelacionadas.join('; '))
       ]]);
+      if (String(atual.STATUS || '').toUpperCase() === 'ATIVO' && usuario.status === 'INATIVO') {
+        avisosInativacao = prepararInativacaoResponsavelMapro_(atual, administrador.EMAIL);
+      }
     } else {
       usuario.id = obterProximoId_(registros);
       aba.appendRow([
@@ -371,7 +382,8 @@ function salvarUsuario(dados) {
         agora,
         agora,
         protegerTextoPlanilha_(usuario.matricula),
-        protegerTextoPlanilha_(usuario.departamento)
+        protegerTextoPlanilha_(usuario.departamento),
+        protegerTextoPlanilha_(usuario.areasRelacionadas.join('; '))
       ]);
     }
 
@@ -380,6 +392,8 @@ function salvarUsuario(dados) {
       usuarioId: usuario.id,
       realizadoPor: administrador.EMAIL
     }));
+    if (bloqueio.hasLock()) bloqueio.releaseLock();
+    if (avisosInativacao.length) enviarAvisosInativacaoResponsavelMapro_(avisosInativacao);
     return {
       sucesso: true,
       mensagem: linhaExistente
@@ -501,8 +515,8 @@ function salvarSolicitacaoMapro(dados) {
   try {
     garantirBancoConfigurado_();
     const usuario = exigirUsuarioAtivo_();
-    if (String(usuario.NIVEL).toUpperCase() !== 'PARTICIPANTE') {
-      throw new Error('Somente participantes podem criar ou editar solicitações.');
+    if (String(usuario.NIVEL).toUpperCase() === 'ADMIN') {
+      throw new Error('Administradores não criam solicitações de Mapro.');
     }
     const entrada = validarDadosSolicitacaoMapro_(dados);
     bloqueio.waitLock(10000);
@@ -633,13 +647,14 @@ function enviarAvisoNovaSolicitacaoMaproSgi_(nomeSolicitante) {
     return false;
   }
   try {
+    const urlSolicitacoes = obterUrlPublicaAplicacao_() + '?pagina=solicitacoesDeMapro';
     MailApp.sendEmail({
       to: destinatario,
       subject: 'NOVA SOLICITAÇÃO DE MAPRO',
       body: 'Olá, SGI!\n\nUma nova solicitação de Mapro foi recebida e está aguardando análise.\n\n' +
         'Solicitante: ' + String(nomeSolicitante || 'Não identificado') +
-        '\n\nCORPORATIVO | P&G | SGI',
-      htmlBody: montarEmailNovaSolicitacaoMaproSgiHtml_(nomeSolicitante),
+        '\n\nAnalisar solicitação: ' + urlSolicitacoes + '\n\nCORPORATIVO | P&G | SGI',
+      htmlBody: montarEmailNovaSolicitacaoMaproSgiHtml_(nomeSolicitante, urlSolicitacoes),
       name: 'SGI MAPRO'
     });
     console.info(JSON.stringify({
@@ -657,7 +672,7 @@ function enviarAvisoNovaSolicitacaoMaproSgi_(nomeSolicitante) {
   }
 }
 
-function montarEmailNovaSolicitacaoMaproSgiHtml_(nomeSolicitante) {
+function montarEmailNovaSolicitacaoMaproSgiHtml_(nomeSolicitante, urlSolicitacoes) {
   const logoUrl = 'https://drive.google.com/thumbnail?id=' + CONFIG.logoId + '&sz=w4000';
   const nome = String(nomeSolicitante || 'Não identificado');
   return '<!doctype html>' +
@@ -680,6 +695,9 @@ function montarEmailNovaSolicitacaoMaproSgiHtml_(nomeSolicitante) {
     '<span style="display:block;margin-bottom:4px;color:#77788a;font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase">Solicitante</span>' +
     '<strong style="display:block;color:#030441;font-size:16px;line-height:1.4">' + escaparHtml_(nome) + '</strong>' +
     '</td></tr></table>' +
+    '<table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr><td align="center" style="padding-top:24px">' +
+    '<a href="' + escaparHtml_(urlSolicitacoes) + '" style="display:inline-block;padding:14px 28px;border-radius:9px;background:#06063d;color:#fff;text-decoration:none;font-weight:800">ANALISAR SOLICITAÇÃO</a>' +
+    '</td></tr></table>' +
     '</td></tr>' +
     '<tr><td align="center" style="background:#06063d;color:#fff;padding:15px;font-size:12px;font-weight:800;letter-spacing:.06em">' +
     'CORPORATIVO &nbsp;|&nbsp; P&amp;G &nbsp;|&nbsp; SGI' +
@@ -691,8 +709,8 @@ function excluirSolicitacaoMapro(idSolicitacao) {
   try {
     garantirBancoConfigurado_();
     const usuario = exigirUsuarioAtivo_();
-    if (String(usuario.NIVEL).toUpperCase() !== 'PARTICIPANTE') {
-      throw new Error('Somente participantes podem excluir suas solicitações.');
+    if (String(usuario.NIVEL).toUpperCase() === 'ADMIN') {
+      throw new Error('Administradores não excluem solicitações próprias.');
     }
     bloqueio.waitLock(10000);
     const aba = obterAbaSolicitacoesMapro_();
@@ -1012,7 +1030,8 @@ function migrarCabecalhosUsuarios_(aba, existentes, cabecalhosPadrao) {
     CRIADO_EM: ['CRIADOEM', 'DATACRIACAO', 'CREATEDAT'],
     ATUALIZADO_EM: ['ATUALIZADOEM', 'ULTIMAATUALIZACAO', 'UPDATEDAT'],
     MATRICULA: ['MATRICULA', 'REGISTRO'],
-    DEPARTAMENTO: ['DEPARTAMENTO', 'DEPARTMENT', 'AREA']
+    DEPARTAMENTO: ['DEPARTAMENTO', 'DEPARTMENT', 'AREA'],
+    AREAS_RELACIONADAS: ['AREASRELACIONADAS', 'RELATEDAREAS']
   };
   const normalizados = existentes.map(normalizarCabecalho_);
   const indicesUsados = {};
@@ -1178,6 +1197,24 @@ function listarDepartamentosCadastroUsuarios_() {
     .sort(function (a, b) { return a.localeCompare(b, 'pt-BR'); });
 }
 
+/** Retorna a lista mantida na coluna AREAS_RELACIONADAS da BASE_DEPARTAMENTOS. */
+function listarAreasRelacionadasCadastroUsuarios_() {
+  const aba = obterPlanilha_().getSheetByName(CONFIG.abaBaseDepartamentos);
+  if (!aba || aba.getLastRow() < 2) return [];
+  const cabecalhos = aba.getRange(1, 1, 1, aba.getLastColumn()).getDisplayValues()[0];
+  const indice = cabecalhos.map(normalizarCabecalho_).indexOf('AREASRELACIONADAS');
+  if (indice === -1) return [];
+  const vistos = {};
+  return aba.getRange(2, indice + 1, aba.getLastRow() - 1, 1).getDisplayValues()
+    .map(function (linha) { return String(linha[0] || '').trim(); })
+    .filter(function (area) {
+      const chave = normalizarTexto_(area);
+      if (!chave || vistos[chave]) return false;
+      vistos[chave] = true;
+      return true;
+    }).sort(function (a, b) { return a.localeCompare(b, 'pt-BR'); });
+}
+
 function validarDepartamentoUsuario_(departamento) {
   const informado = String(departamento || '').trim();
   const opcoes = listarDepartamentosCadastroUsuarios_();
@@ -1191,6 +1228,31 @@ function validarDepartamentoUsuario_(departamento) {
   return correspondente;
 }
 
+function validarAreasRelacionadasUsuario_(areas, nivel) {
+  if (['GERENTE', 'DIRETOR'].indexOf(String(nivel || '').toUpperCase()) === -1) return [];
+  const opcoes = listarAreasRelacionadasCadastroUsuarios_();
+  if (!opcoes.length) {
+    throw new Error('Cadastre as opções na coluna AREAS_RELACIONADAS da BASE_DEPARTAMENTOS.');
+  }
+  const vistas = {};
+  const validadas = (Array.isArray(areas) ? areas : []).map(function (area) {
+    const correspondente = opcoes.find(function (opcao) {
+      return normalizarTexto_(opcao) === normalizarTexto_(area);
+    });
+    if (!correspondente) throw new Error('Selecione somente áreas relacionadas válidas.');
+    return correspondente;
+  }).filter(function (area) {
+    const chave = normalizarTexto_(area);
+    if (vistas[chave]) return false;
+    vistas[chave] = true;
+    return true;
+  });
+  if (!validadas.length) {
+    throw new Error('Selecione ao menos uma área relacionada para o gerente ou diretor.');
+  }
+  return validadas;
+}
+
 function validarDadosUsuario_(dados) {
   const entrada = dados || {};
   const usuario = {
@@ -1199,6 +1261,8 @@ function validarDadosUsuario_(dados) {
     email: normalizarEmail_(entrada.email),
     matricula: String(entrada.matricula || '').trim(),
     departamento: String(entrada.departamento || '').trim(),
+    areasRelacionadas: Array.isArray(entrada.areasRelacionadas)
+      ? entrada.areasRelacionadas : [],
     nivel: String(entrada.nivel || '').trim().toUpperCase(),
     status: String(entrada.status || '').trim().toUpperCase()
   };
@@ -1217,7 +1281,7 @@ function validarDadosUsuario_(dados) {
   if (!usuario.departamento) {
     throw new Error('Selecione o departamento do usuário.');
   }
-  if (['ADMIN', 'PARTICIPANTE'].indexOf(usuario.nivel) === -1) {
+  if (['ADMIN', 'PARTICIPANTE', 'GERENTE', 'DIRETOR'].indexOf(usuario.nivel) === -1) {
     throw new Error('Selecione um nível de usuário válido.');
   }
   if (['ATIVO', 'INATIVO'].indexOf(usuario.status) === -1) {
@@ -1233,6 +1297,8 @@ function mapearUsuarioParaCliente_(usuario) {
     email: normalizarEmail_(usuario.EMAIL),
     matricula: String(usuario.MATRICULA || ''),
     departamento: String(usuario.DEPARTAMENTO || ''),
+    areasRelacionadas: String(usuario.AREAS_RELACIONADAS || '').split(';')
+      .map(function (area) { return area.trim(); }).filter(Boolean),
     nivel: String(usuario.NIVEL || ''),
     status: String(usuario.STATUS || ''),
     atualizadoEm: String(usuario.ATUALIZADO_EM || '')
@@ -1270,7 +1336,8 @@ function exigirUsuarioAtivo_() {
   if (!usuario || String(usuario.STATUS).toUpperCase() !== 'ATIVO') {
     throw new Error('Seu usuário não está ativo no sistema.');
   }
-  if (['ADMIN', 'PARTICIPANTE'].indexOf(String(usuario.NIVEL).toUpperCase()) === -1) {
+  if (['ADMIN', 'PARTICIPANTE', 'GERENTE', 'DIRETOR']
+      .indexOf(String(usuario.NIVEL).toUpperCase()) === -1) {
     throw new Error('Seu nível de usuário não é válido.');
   }
   return usuario;
@@ -1707,16 +1774,8 @@ function listarMinhasMapros() {
   try {
     garantirBancoConfigurado_();
     const usuario = exigirUsuarioAtivo_();
-    const email = normalizarEmail_(usuario.EMAIL);
-    const mapros = lerRegistros_(
-      criarOuAtualizarAbaFlexivel_(obterPlanilha_(), CONFIG.abaMapros, CABECALHOS_MAPROS),
-      CABECALHOS_MAPROS
-    ).filter(function (mapro) {
-      const lider = normalizarEmail_(mapro['EMAIL_LÍDER']) === email;
-      const participantes = String(mapro.EMAILS_PARTICIPANTES || '').split(';')
-        .map(normalizarEmail_);
-      return lider || participantes.indexOf(email) !== -1;
-    }).map(mapearMaproParaCliente_);
+    cancelarMaprosInativas_();
+    const mapros = obterMaprosAcessiveis_(usuario, false).map(mapearMaproParaCliente_);
     return { sucesso: true, dados: mapros };
   } catch (erro) {
     return respostaDeErro_(erro);
@@ -1955,6 +2014,14 @@ function montarSecoesDadosSolicitacaoEmail_(solicitacao, rotuloId, valorId) {
     return texto || padrao || 'Não informado';
   }
 
+  function formatarIndicadores(valor) {
+    const itens = String(valor == null ? '' : valor).split(/\r?\n|;/)
+      .map(function (item) { return item.trim().replace(/[,.]+$/, ''); })
+      .filter(Boolean);
+    if (!itens.length) return 'Não informados';
+    return itens.join(', ') + '.';
+  }
+
   return [
     {
       titulo: 'IDENTIFICAÇÃO DO PROJETO',
@@ -1986,7 +2053,7 @@ function montarSecoesDadosSolicitacaoEmail_(solicitacao, rotuloId, valorId) {
         ['Por que', valorOuPadrao(solicitacao.PORQUE)],
         ['Resultados esperados', valorOuPadrao(solicitacao.RESULTADOS_ESPERADOS, 'Não informados')],
         ['Indicadores definidos?', valorOuPadrao(solicitacao.POSSUI_INDICADORES_DEFINIDOS)],
-        ['Indicadores do projeto', valorOuPadrao(solicitacao.INDICADORES, 'Não informados')]
+        ['Indicadores do projeto', formatarIndicadores(solicitacao.INDICADORES)]
       ]
     },
     {

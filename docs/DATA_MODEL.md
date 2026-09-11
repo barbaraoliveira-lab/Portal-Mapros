@@ -8,11 +8,20 @@ edições aceitam somente valores existentes na coluna `DEPARTAMENTO` da aba
 nova coluna vazia pela migração idempotente e devem ter o departamento informado na
 próxima edição.
 
+O schema também mantém `AREAS_RELACIONADAS` em `USUARIOS`, como lista separada por
+ponto e vírgula para os perfis `GERENTE` e `DIRETOR`. As opções dessa seleção são
+administradas, uma por linha, na coluna `AREAS_RELACIONADAS` de `BASE_DEPARTAMENTOS`.
+A migração acrescenta ambas as colunas sem remover os registros existentes.
+
 `MAPROS.DEPARTAMENTO` é derivado do departamento do usuário registrado em `ID_LÍDER`.
 Da mesma forma, `MAPRO_ATIVIDADES.DEPARTAMENTO` é derivado do usuário registrado em
 `ID_RESPONSAVEL`, inclusive para tópicos que possuam responsável. A configuração da
 estrutura sincroniza esses valores em lote para registros existentes; salvamentos
 posteriores repetem a validação e a derivação no servidor.
+
+Tópicos não possuem responsável nem departamento na interface. Quando uma atividade
+possui subatividades, esses campos deixam de ser considerados na atividade-pai: a
+responsabilidade operacional e os avisos passam a usar somente os itens-folha.
 
 ## Atividades da Mapro
 
@@ -31,6 +40,33 @@ derivadas: o início é a menor data inicial dos descendentes e o término é a 
 A situação de um `TOPICO` também é derivada
 e a conclusão ocorre quando todos os itens aplicáveis descendentes estão concluídos.
 O card “Total de itens na Mapro” inclui tópicos, atividades e subatividades ativas.
+
+No portfólio, a situação consolidada usa somente atividades e subatividades-folha ativas.
+A Mapro só pode terminar quando todas as folhas estiverem em `CONCLUIDA` ou
+`NAO_APLICAVEL`. Nesse conjunto terminal, mais de 50% como `NAO_APLICAVEL` prevalecem
+como não aplicável; caso contrário, mais de 50% como `CONCLUIDA` tornam a Mapro concluída.
+Empate ou qualquer folha ainda aberta mantêm a Mapro em andamento. A classificação rápida é `ATRASADA` quando há item ativo
+vencido, `NO_PRAZO` quando não há atraso (incluindo prazo próximo) e `CONCLUIDA` quando
+a regra de maioria é atendida.
+
+Mapros sem nenhum tópico ativo são canceladas automaticamente após
+`PRAZO_PREENCHIMENTO`, definido em quinze dias na aprovação. O registro recebe status
+`CANCELADA` e motivo `INATIVIDADE DE PREENCHIMENTO`; ele é preservado para auditoria do
+SGI e ocultado dos demais portfólios.
+
+`MAPROS.CONCLUIDA_EM` registra o instante em que a situação consolidada passa para
+concluída. O valor permanece estável enquanto a Mapro continuar concluída e é limpo se ela
+voltar a ficar em andamento. Projetos antigos sem esse registro usam `ATUALIZADO_EM` como
+referência compatível no indicador de tempo médio.
+
+O Dashboard considera uma Mapro replanejada quando `MAPRO_HISTORICO_PRAZO` possui
+ao menos uma alteração, posterior ao início do acompanhamento, em que `PRAZO_NOVO` é
+maior que `PRAZO_ANTERIOR`. A regra abrange tanto o replanejamento de uma atividade
+existente quanto uma nova atividade que amplie o prazo consolidado do projeto.
+
+“Minhas Atividades” usa somente atividades e subatividades-folha ativas cujo
+`ID_RESPONSAVEL` corresponde ao usuário autenticado. Tópicos e itens-pai não entram nos
+cards para evitar dupla contagem.
 
 Novos itens recebem uma ordem superior à maior ordem existente e, por isso, aparecem
 depois dos itens irmãos já cadastrados. Ao mover uma atividade para outro tópico, o
@@ -61,6 +97,12 @@ Após esse marco, alterações de `DATA_INICIO` ou `DATA_FINAL` ficam pendentes 
 até a confirmação explícita pelo botão `SALVAR EDIÇÕES`. A confirmação exige um novo
 valor em `OBSERVACAO`, utilizado como motivo do replanejamento. As semanas são exibidas
 no formato `Sww/aa`, por exemplo `S32/26`.
+
+Antes do marco de acompanhamento, a tabela permanece em modo de edição para usuários
+autorizados e permite montar a hierarquia completa, inclusive subatividades de atividades
+ainda não salvas. Tanto antes quanto depois do marco, a persistência do corpo do projeto
+ocorre somente pelo botão `SALVAR EDIÇÕES`, que envia em lote apenas linhas novas ou
+alteradas. O autosave continua restrito ao cabeçalho da Mapro.
 
 O motivo é exigido somente para a alteração direta. As sucessoras deslocadas pela regra
 de predecessora recebem histórico automático com a autoria da mesma operação, sem exigir

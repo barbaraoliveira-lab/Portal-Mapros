@@ -28,7 +28,7 @@ const CABECALHOS_MAPRO_NOTIFICACOES = [
 ];
 
 const CABECALHOS_BASE_CONTAGIRO = ['CONTAGIRO'];
-const CABECALHOS_BASE_DEPARTAMENTOS = ['DEPARTAMENTO'];
+const CABECALHOS_BASE_DEPARTAMENTOS = ['DEPARTAMENTO', 'AREAS_RELACIONADAS'];
 const CABECALHOS_BASE_ESTRATEGIA = [
   'NEGOCIO', 'DIMENSAO_BSC', 'OBJETIVO_BSC', 'COR', 'ATIVO', 'LINK_BSC'
 ];
@@ -85,6 +85,7 @@ function configurarEstruturaMapros_(planilha, abaMapros, abaUsuarios) {
   );
   migrarHierarquiaAtividadesMapro_(abaAtividades);
   normalizarEstadoInicialMapros_(abaMapros);
+  recalcularSituacoesMaprosExistentes_(abaMapros, abaAtividades);
   sincronizarParticipantesMapros_(abaMapros, abaParticipantes, abaUsuarios);
   sincronizarDepartamentosCadastradosMapro_(abaMapros, abaAtividades, abaUsuarios);
   [abaParticipantes, abaAtividades, abaHistorico, abaHistoricoPrazo, abaNotificacoes,
@@ -255,6 +256,14 @@ function sincronizarParticipantesMapros_(abaMapros, abaParticipantes, abaUsuario
   const agora = new Date().toISOString();
   const novasLinhas = [];
   let alterouVinculo = false;
+  vinculosExistentes.forEach(function (vinculo) {
+    const usuarioVinculado = porEmail[normalizarEmail_(vinculo.EMAIL)];
+    if (usuarioVinculado && String(usuarioVinculado.STATUS || '').toUpperCase() !== 'ATIVO' &&
+        String(vinculo.ATIVO || 'SIM').toUpperCase() !== 'NAO') {
+      vinculo.ATIVO = 'NAO';
+      alterouVinculo = true;
+    }
+  });
   mapros.forEach(function (mapro) {
     const idMapro = formatarId_(Number(mapro.ID_MAPRO));
     const membrosPorEmail = {};
@@ -262,6 +271,9 @@ function sincronizarParticipantesMapros_(abaMapros, abaParticipantes, abaUsuario
     function incluirMembro(membro) {
       const email = normalizarEmail_(membro.email);
       if (!email) return;
+      const usuarioCadastrado = porEmail[email];
+      if (usuarioCadastrado &&
+          String(usuarioCadastrado.STATUS || '').toUpperCase() !== 'ATIVO') return;
       const atual = membrosPorEmail[email];
       if (!atual || prioridadePapel[membro.papel] > prioridadePapel[atual.papel]) {
         membrosPorEmail[email] = Object.assign({}, membro, { email: email });
@@ -343,6 +355,7 @@ function carregarPaginaMapros() {
   try {
     garantirBancoConfigurado_();
     const usuario = exigirUsuarioAtivo_();
+    cancelarMaprosInativas_();
     const admin = String(usuario.NIVEL).toUpperCase() === 'ADMIN';
     if (admin) {
       try {
@@ -365,6 +378,7 @@ function carregarPaginaMaprosInicial() {
   try {
     garantirBancoConfigurado_();
     const usuario = exigirUsuarioAtivo_();
+    cancelarMaprosInativas_();
     const admin = String(usuario.NIVEL).toUpperCase() === 'ADMIN';
     if (admin) {
       try {
@@ -424,13 +438,31 @@ function carregarDashboardMapro() {
   try {
     garantirBancoConfigurado_();
     const usuario = exigirUsuarioAtivo_();
+    cancelarMaprosInativas_();
     const admin = String(usuario.NIVEL || '').toUpperCase() === 'ADMIN';
     const mapros = obterMaprosAcessiveis_(usuario, admin);
     const atividades = lerRegistros_(obterAbaMaproAtividades_(), CABECALHOS_MAPRO_ATIVIDADES);
     const porMapro = agruparAtividadesPorMapro_(atividades);
+    const maprosReplanejadas = obterIdsMaprosReplanejadasDashboardMapro_(
+      lerRegistros_(obterAbaMaproHistoricoPrazo_(), CABECALHOS_MAPRO_HISTORICO_PRAZO)
+    );
     const projetos = mapros.map(function (mapro) {
       const atividadesMapro = porMapro[String(Number(mapro.ID_MAPRO))] || [];
       const resumo = calcularResumoAtividadesMapro_(atividadesMapro);
+      const operacionais = obterFolhasDashboardMapro_(atividadesMapro);
+      const minhas = operacionais.filter(function (atividade) {
+        return idsIguaisMapro_(atividade.ID_RESPONSAVEL, usuario.ID);
+      });
+      const mapearMinha = function (atividade) {
+        return {
+          id: String(atividade.ID_ATIVIDADE || ''),
+          descricao: String(atividade.NOME_ATIVIDADE || ''),
+          prazo: dataIsoMapro_(atividade.DATA_FINAL),
+          responsavel: String(atividade.NOME_RESPONSAVEL || ''),
+          status: String(atividade.STATUS_ATIVIDADE || '').toUpperCase(),
+          saude: calcularSaudeAtividadeMapro_(atividade)
+        };
+      };
       const statusPersistido = String(mapro.STATUS_MAPRO || '').toUpperCase();
       const status = ['AGUARDANDO_INICIO', 'AGUARDANDO_PREENCHIMENTO']
         .indexOf(statusPersistido) !== -1
@@ -439,23 +471,12 @@ function carregarDashboardMapro() {
       const statusNormalizado = normalizarSituacaoMapro_(status);
       const canceladaPorInatividade = statusNormalizado === 'CANCELADA' &&
         normalizarTexto_(mapro.MOTIVO_CANCELAMENTO).indexOf('inatividade') !== -1;
-      const atrasadas = atividadesMapro.filter(function (atividade) {
-        return String(atividade.ATIVO || 'SIM').toUpperCase() !== 'NAO' &&
-          String(atividade.TIPO || '').toUpperCase() !== 'TOPICO' &&
-          calcularSaudeAtividadeMapro_(atividade) === 'VERMELHO';
-      }).map(function (atividade) {
-        return {
-          id: String(atividade.ID_ATIVIDADE || ''),
-          descricao: String(atividade.NOME_ATIVIDADE || ''),
-          responsavel: String(atividade.NOME_RESPONSAVEL || ''),
-          prazo: dataIsoMapro_(atividade.DATA_FINAL)
-        };
-      });
       return {
         id: formatarId_(Number(mapro.ID_MAPRO)),
         nome: normalizarNomeProjeto_(mapro.NOME_PROJETO),
         portfolio: String(mapro['PORTFÓLIO'] || ''),
         contagiro: String(mapro.CONTAGIRO || ''),
+        nivel: String(mapro.NIVEL || ''),
         area: String(mapro.DEPARTAMENTO || ''),
         lider: String(mapro['NOME_LÍDER'] || ''),
         status: statusNormalizado,
@@ -466,10 +487,14 @@ function carregarDashboardMapro() {
         dataInicio: resumo.dataInicio || dataIsoMapro_(mapro.DATA_INICIO),
         prazo: resumo.dataFinal || dataIsoMapro_(mapro.DATA_FINAL),
         conclusaoEm: statusNormalizado === 'CONCLUÍDA'
-          ? dataIsoMapro_(mapro.ATUALIZADO_EM) : '',
+          ? dataIsoMapro_(mapro.CONCLUIDA_EM || mapro.ATUALIZADO_EM) : '',
         percentual: resumo.percentual,
         totalAtividades: resumo.totalAtividades,
-        atividadesAtrasadas: atrasadas
+        replanejada: Boolean(maprosReplanejadas[String(Number(mapro.ID_MAPRO))]),
+        temNovasAtividades: Boolean(mapro.ACOMPANHAMENTO_INICIADO_EM) && operacionais.some(function (atividade) {
+          return new Date(atividade.CRIADO_EM).getTime() > new Date(mapro.ACOMPANHAMENTO_INICIADO_EM).getTime();
+        }),
+        minhasAtividades: minhas.map(mapearMinha)
       };
     }).sort(function (a, b) { return Number(a.id) - Number(b.id); });
     return {
@@ -478,6 +503,7 @@ function carregarDashboardMapro() {
         admin: admin,
         usuario: {nome: String(usuario.NOME || ''), email: normalizarEmail_(usuario.EMAIL)},
         projetos: projetos,
+        atualizadoEm: new Date().toISOString(),
         logoUrl: 'https://drive.google.com/thumbnail?id=' + CONFIG.logoCadastroId + '&sz=w4000',
         logoEmpresaUrl: 'https://drive.google.com/thumbnail?id=' + CONFIG.logoEmpresaId + '&sz=w600',
         urlAplicacao: ScriptApp.getService().getUrl()
@@ -488,10 +514,30 @@ function carregarDashboardMapro() {
   }
 }
 
+function obterFolhasDashboardMapro_(atividades) {
+  const ativas = atividades.filter(a => String(a.ATIVO || 'SIM').toUpperCase() !== 'NAO');
+  const pais = {};
+  ativas.forEach(a => { if (a.ID_ATIVIDADE_PAI) pais[String(a.ID_ATIVIDADE_PAI)] = true; });
+  return ativas.filter(a => String(a.TIPO).toUpperCase() !== 'TOPICO' && !pais[String(a.ID_ATIVIDADE)]);
+}
+
+function obterIdsMaprosReplanejadasDashboardMapro_(historicos) {
+  const ids = {};
+  (historicos || []).forEach(function (historico) {
+    const anterior = dataIsoMapro_(historico.PRAZO_ANTERIOR);
+    const novo = dataIsoMapro_(historico.PRAZO_NOVO);
+    if (anterior && novo && novo > anterior) {
+      ids[String(Number(historico.ID_MAPRO))] = true;
+    }
+  });
+  return ids;
+}
+
 function listarMaprosPagina(portfolio) {
   try {
     garantirBancoConfigurado_();
     const usuario = exigirUsuarioAtivo_();
+    cancelarMaprosInativas_();
     const admin = String(usuario.NIVEL).toUpperCase() === 'ADMIN';
     const filtroPortfolio = String(portfolio || '').trim();
     const mapros = obterMaprosAcessiveis_(usuario, admin).filter(function (mapro) {
@@ -567,8 +613,7 @@ function obterDetalhesMapro(idMapro) {
           podeEditarProprias: contexto.podeEditarProprias,
           podeIniciarAcompanhamento: contexto.podeIniciarAcompanhamento
         },
-        podeGerenciarParticipantes: contexto.admin ||
-          normalizarEmail_(mapro['EMAIL_LÍDER']) === normalizarEmail_(contexto.usuario.EMAIL),
+        podeGerenciarParticipantes: podeGerenciarParticipantesMapro_(contexto),
         bases: obterBasesMapro_()
       }
     };
@@ -1741,10 +1786,8 @@ function adicionarParticipantesMapro(idMapro, participantesInformados) {
   try {
     garantirBancoConfigurado_();
     const contexto = exigirAcessoMapro_(idMapro);
-    const lider = normalizarEmail_(contexto.mapro['EMAIL_LÍDER']) ===
-      normalizarEmail_(contexto.usuario.EMAIL);
-    if (!contexto.admin && !lider) {
-      throw new Error('Somente o líder do projeto ou o ADMIN pode adicionar participantes.');
+    if (!podeGerenciarParticipantesMapro_(contexto)) {
+      throw new Error('Seu perfil não permite adicionar participantes nesta Mapro.');
     }
     const entradas = Array.isArray(participantesInformados) ? participantesInformados : [];
     const porId = {};
@@ -1860,10 +1903,8 @@ function removerParticipanteMapro(idMapro, idUsuario) {
   try {
     garantirBancoConfigurado_();
     const contexto = exigirAcessoMapro_(idMapro);
-    const lider = normalizarEmail_(contexto.mapro['EMAIL_LÍDER']) ===
-      normalizarEmail_(contexto.usuario.EMAIL);
-    if (!contexto.admin && !lider) {
-      throw new Error('Somente o líder do projeto ou o ADMIN pode remover participantes.');
+    if (!podeGerenciarParticipantesMapro_(contexto)) {
+      throw new Error('Seu perfil não permite remover participantes desta Mapro.');
     }
     bloqueio.waitLock(10000);
     const aba = obterAbaMaproParticipantes_();
@@ -1997,40 +2038,10 @@ function formatarPapelProjetoMapro_(papel) {
 }
 
 function verificarInatividadeMapros() {
-  const bloqueio = LockService.getDocumentLock();
   try {
     garantirBancoConfigurado_();
     const administrador = exigirAdministrador_();
-    bloqueio.waitLock(10000);
-    const aba = obterAbaMapros_();
-    const registros = lerRegistros_(aba, CABECALHOS_MAPROS);
-    const agora = new Date();
-    let canceladas = 0;
-    const status = [];
-    const atualizadoEm = [];
-    const motivos = [];
-    registros.forEach(function (mapro) {
-      let situacao = String(mapro.STATUS_MAPRO || '').toUpperCase();
-      let atualizado = mapro.ATUALIZADO_EM;
-      let motivo = mapro.MOTIVO_CANCELAMENTO;
-      const prazo = converterDataMapro_(mapro.PRAZO_PREENCHIMENTO);
-      if ((situacao === 'AGUARDANDO_INICIO' || situacao === 'AGUARDANDO_PREENCHIMENTO') &&
-          !mapro.INICIADA_EM && prazo && prazo.getTime() < agora.getTime()) {
-        situacao = 'CANCELADA';
-        atualizado = agora.toISOString();
-        motivo = 'INATIVIDADE DE PREENCHIMENTO';
-        canceladas += 1;
-      }
-      status.push([situacao]);
-      atualizadoEm.push([atualizado]);
-      motivos.push([motivo]);
-    });
-    if (registros.length && canceladas) {
-      aba.getRange(2, 11, registros.length, 1).setValues(status);
-      aba.getRange(2, 14, registros.length, 1).setValues(atualizadoEm);
-      const colunaMotivo = CABECALHOS_MAPROS.indexOf('MOTIVO_CANCELAMENTO') + 1;
-      aba.getRange(2, colunaMotivo, registros.length, 1).setValues(motivos);
-    }
+    const canceladas = cancelarMaprosInativas_();
     console.info(JSON.stringify({
       acao: 'INATIVIDADE_MAPROS_VERIFICADA',
       canceladas: canceladas,
@@ -2044,6 +2055,59 @@ function verificarInatividadeMapros() {
     };
   } catch (erro) {
     return respostaDeErro_(erro);
+  }
+}
+
+/** Cancela automaticamente Mapros sem nenhum tópico após o prazo de preenchimento. */
+function cancelarMaprosInativas_() {
+  const aba = obterAbaMapros_();
+  const registros = lerRegistros_(aba, CABECALHOS_MAPROS);
+  if (!registros.length) return 0;
+  const agora = new Date();
+  const obterTopicosPorMapro = function () {
+    const topicos = {};
+    lerRegistros_(obterAbaMaproAtividades_(), CABECALHOS_MAPRO_ATIVIDADES)
+      .forEach(function (atividade) {
+      if (String(atividade.ATIVO || 'SIM').toUpperCase() !== 'NAO' &&
+          String(atividade.TIPO || '').toUpperCase() === 'TOPICO') {
+        topicos[String(Number(atividade.ID_MAPRO))] = true;
+      }
+    });
+    return topicos;
+  };
+  const topicosPorMapro = obterTopicosPorMapro();
+  const deveCancelar = function (mapro, topicos) {
+    const situacao = String(mapro.STATUS_MAPRO || '').toUpperCase();
+    const prazo = converterDataMapro_(mapro.PRAZO_PREENCHIMENTO);
+    return ['AGUARDANDO_INICIO', 'AGUARDANDO_PREENCHIMENTO'].indexOf(situacao) !== -1 &&
+      !topicos[String(Number(mapro.ID_MAPRO))] && prazo &&
+      prazo.getTime() < agora.getTime();
+  };
+  if (!registros.some(function (mapro) { return deveCancelar(mapro, topicosPorMapro); })) return 0;
+
+  const bloqueio = LockService.getDocumentLock();
+  try {
+    bloqueio.waitLock(10000);
+    const atuais = lerRegistros_(aba, CABECALHOS_MAPROS);
+    const topicosAtuais = obterTopicosPorMapro();
+    let canceladas = 0;
+    atuais.forEach(function (mapro) {
+      if (!deveCancelar(mapro, topicosAtuais)) return;
+      mapro.STATUS_MAPRO = 'CANCELADA';
+      mapro.ATUALIZADO_EM = agora.toISOString();
+      mapro.MOTIVO_CANCELAMENTO = 'INATIVIDADE DE PREENCHIMENTO';
+      canceladas += 1;
+    });
+    if (canceladas) {
+      aba.getRange(2, 1, atuais.length, CABECALHOS_MAPROS.length).setValues(
+        atuais.map(function (mapro) {
+          return CABECALHOS_MAPROS.map(function (cabecalho) {
+            return mapro[cabecalho] == null ? '' : mapro[cabecalho];
+          });
+        })
+      );
+    }
+    return canceladas;
   } finally {
     if (bloqueio.hasLock()) bloqueio.releaseLock();
   }
@@ -2061,10 +2125,54 @@ function obterMaprosAcessiveis_(usuario, admin) {
         idsPermitidos[String(Number(vinculo.ID_MAPRO))] = true;
       }
     });
+  const idsPermitidosPorArea = obterIdsMaprosPermitidosPorArea_(usuario);
   return mapros.filter(function (mapro) {
-    return Boolean(idsPermitidos[String(Number(mapro.ID_MAPRO))]) ||
+    if (String(mapro.STATUS_MAPRO || '').toUpperCase() === 'CANCELADA') return false;
+    const id = String(Number(mapro.ID_MAPRO));
+    return Boolean(idsPermitidos[id]) || Boolean(idsPermitidosPorArea[id]) ||
       normalizarEmail_(mapro['EMAIL_LÍDER']) === email;
   });
+}
+
+function obterAreasRelacionadasUsuarioMapro_(usuario) {
+  if (['GERENTE', 'DIRETOR'].indexOf(String(usuario && usuario.NIVEL || '').toUpperCase()) === -1) {
+    return [];
+  }
+  const vistas = {};
+  return String(usuario.AREAS_RELACIONADAS || '').split(';').map(function (area) {
+    return String(area || '').trim();
+  }).filter(function (area) {
+    const chave = normalizarTexto_(area);
+    if (!chave || vistas[chave]) return false;
+    vistas[chave] = true;
+    return true;
+  });
+}
+
+function obterIdsMaprosPermitidosPorArea_(usuario, atividadesCarregadas) {
+  const areas = obterAreasRelacionadasUsuarioMapro_(usuario);
+  if (!areas.length) return {};
+  const areasNormalizadas = {};
+  areas.forEach(function (area) { areasNormalizadas[normalizarTexto_(area)] = true; });
+  const atividades = Array.isArray(atividadesCarregadas) ? atividadesCarregadas :
+    lerRegistros_(obterAbaMaproAtividades_(), CABECALHOS_MAPRO_ATIVIDADES);
+  const pais = {};
+  atividades.forEach(function (atividade) {
+    if (String(atividade.ATIVO || 'SIM').toUpperCase() !== 'NAO' && atividade.ID_ATIVIDADE_PAI) {
+      pais[String(atividade.ID_ATIVIDADE_PAI)] = true;
+    }
+  });
+  const ids = {};
+  atividades.forEach(function (atividade) {
+    const ativa = String(atividade.ATIVO || 'SIM').toUpperCase() !== 'NAO';
+    const operacional = String(atividade.TIPO || '').toUpperCase() !== 'TOPICO';
+    const folha = !pais[String(atividade.ID_ATIVIDADE)];
+    if (ativa && operacional && folha &&
+        areasNormalizadas[normalizarTexto_(atividade.DEPARTAMENTO)]) {
+      ids[String(Number(atividade.ID_MAPRO))] = true;
+    }
+  });
+  return ids;
 }
 
 function exigirAcessoMapro_(idMapro) {
@@ -2080,13 +2188,19 @@ function exigirAcessoMapro_(idMapro) {
     return normalizarEmail_(item.email) === email;
   });
   const usuarioLider = email === normalizarEmail_(mapro['EMAIL_LÍDER']);
+  const acessoPorArea = Boolean(obterIdsMaprosPermitidosPorArea_(usuario)[
+    String(Number(mapro.ID_MAPRO))
+  ]);
   if (!admin) {
-    if (!vinculo && !usuarioLider) throw new Error('Você não possui acesso a esta Mapro.');
+    if (String(mapro.STATUS_MAPRO || '').toUpperCase() === 'CANCELADA') {
+      throw new Error('Esta Mapro foi cancelada e está disponível somente para o SGI.');
+    }
+    if (!vinculo && !usuarioLider && !acessoPorArea) {
+      throw new Error('Você não possui acesso a esta Mapro.');
+    }
   }
-  const papel = admin ? 'ADMIN' : normalizarPapelProjetoMapro_(
-    vinculo && vinculo.papel,
-    usuarioLider
-  );
+  const papel = admin ? 'ADMIN' : acessoPorArea && !vinculo && !usuarioLider
+    ? 'ACESSO_AREA' : normalizarPapelProjetoMapro_(vinculo && vinculo.papel, usuarioLider);
   const podeIniciarAcompanhamento = admin || Boolean(
     vinculo && String(vinculo.papel || '').trim().toUpperCase() === 'EDITOR'
   );
@@ -2097,10 +2211,20 @@ function exigirAcessoMapro_(idMapro) {
     linha: linha,
     participantes: participantes,
     papel: papel,
+    acessoPorArea: acessoPorArea,
     podeIniciarAcompanhamento: podeIniciarAcompanhamento,
     podeEditarTudo: ['ADMIN', 'LIDER', 'EDITOR'].indexOf(papel) !== -1,
     podeEditarProprias: papel === 'OBSERVADOR'
   };
+}
+
+function podeGerenciarParticipantesMapro_(contexto) {
+  const nivel = String(contexto && contexto.usuario && contexto.usuario.NIVEL || '')
+    .trim().toUpperCase();
+  const papel = String(contexto && contexto.papel || '').trim().toUpperCase();
+  return Boolean(contexto && contexto.admin) ||
+    ['GERENTE', 'DIRETOR'].indexOf(nivel) !== -1 ||
+    ['LIDER', 'EDITOR'].indexOf(papel) !== -1;
 }
 
 function normalizarPapelProjetoMapro_(papel, lider) {
@@ -2127,7 +2251,9 @@ function podeEditarAtividadeMapro_(contexto, atividade) {
 
 function mapearResumoMapro_(mapro, atividades) {
   const resumo = calcularResumoAtividadesMapro_(atividades);
-  const status = normalizarSituacaoMapro_(mapro.STATUS_MAPRO);
+  const statusBruto = calcularSituacaoProjetoMapro_(mapro.STATUS_MAPRO, atividades);
+  const status = normalizarSituacaoMapro_(statusBruto);
+  const saude = calcularSaudeMapro_(status, atividades);
   return {
     idMapro: formatarId_(Number(mapro.ID_MAPRO)),
     portfolio: String(mapro['PORTFÓLIO'] || ''),
@@ -2137,8 +2263,17 @@ function mapearResumoMapro_(mapro, atividades) {
     dataFinal: resumo.dataFinal || dataIsoMapro_(mapro.DATA_FINAL),
     percentualConclusao: resumo.percentual,
     situacao: status,
-    saude: calcularSaudeMapro_(status, atividades)
+    saude: saude,
+    classificacaoPortfolio: calcularClassificacaoPortfolioMapro_(status, saude)
   };
+}
+
+function calcularClassificacaoPortfolioMapro_(situacao, saude) {
+  const status = normalizarSituacaoMapro_(situacao);
+  if (status === 'CANCELADA') return 'CANCELADA';
+  if (status === 'NÃO APLICÁVEL') return 'NAO_APLICAVEL';
+  if (status === 'CONCLUÍDA') return 'CONCLUIDA';
+  return String(saude || '').toUpperCase() === 'VERMELHO' ? 'ATRASADA' : 'NO_PRAZO';
 }
 
 function mapearDetalhesMapro_(mapro) {
@@ -2325,8 +2460,8 @@ function montarEmailAberturaProjetoTextoMapro_(destinatario, mapro) {
     'Negócio: ' + String(mapro.NEGOCIO || 'Não informado'),
     'Dimensão BSC: ' + String(mapro.DIMENSAO_BSC || 'Não informada'),
     'Objetivo BSC: ' + String(mapro.OBJETIVO_BSC || 'Não informado'),
-    'Data de início: ' + formatarDataEmailMapro_(mapro.DATA_INICIO),
-    'Data final: ' + formatarDataEmailMapro_(mapro.DATA_FINAL),
+    'Início: ' + formatarDataEmailMapro_(mapro.DATA_INICIO),
+    'Prazo final: ' + formatarDataEmailMapro_(mapro.DATA_FINAL),
     'O que é o projeto: ' + String(mapro.O_QUE_E || 'Não informado'),
     'Por que: ' + String(mapro.PORQUE || 'Não informado'),
     'Resultados esperados: ' + String(mapro.RESULTADOS_ESPERADOS || 'Não informados'),
@@ -2366,8 +2501,8 @@ function montarEmailAberturaProjetoHtmlMapro_(destinatario, mapro) {
     montarLinhaEmail_('Negócio', String(mapro.NEGOCIO || 'Não informado')) +
     montarLinhaEmail_('Dimensão BSC', String(mapro.DIMENSAO_BSC || 'Não informada')) +
     montarLinhaEmail_('Objetivo BSC', String(mapro.OBJETIVO_BSC || 'Não informado')) +
-    montarLinhaEmail_('Data de início', formatarDataEmailMapro_(mapro.DATA_INICIO)) +
-    montarLinhaEmail_('Data final', formatarDataEmailMapro_(mapro.DATA_FINAL)) +
+    montarLinhaEmail_('Início', formatarDataEmailMapro_(mapro.DATA_INICIO)) +
+    montarLinhaEmail_('Prazo final', formatarDataEmailMapro_(mapro.DATA_FINAL)) +
     montarLinhaEmail_('O que é o projeto', String(mapro.O_QUE_E || 'Não informado')) +
     montarLinhaEmail_('Por que', String(mapro.PORQUE || 'Não informado')) +
     montarLinhaEmail_('Resultados esperados', String(mapro.RESULTADOS_ESPERADOS || 'Não informados')) +
@@ -2393,7 +2528,8 @@ function mapearAtividadeMaproParaCliente_(atividade) {
     ordem: Number(atividade.ORDEM || 0),
     tipo: String(atividade.TIPO || ''),
     nomeAtividade: String(atividade.NOME_ATIVIDADE || ''),
-    idResponsavel: formatarId_(Number(atividade.ID_RESPONSAVEL)),
+    idResponsavel: String(atividade.ID_RESPONSAVEL || '').trim()
+      ? formatarId_(Number(atividade.ID_RESPONSAVEL)) : '',
     responsavel: String(atividade.NOME_RESPONSAVEL || ''),
     departamento: String(atividade.DEPARTAMENTO || ''),
     dataInicio: inicio,
@@ -2539,10 +2675,14 @@ function agregarTopicosMapro_(atividades) {
 function calcularSaudeMapro_(situacao, atividades) {
   if (situacao === 'NÃO APLICÁVEL' || situacao === 'CANCELADA') return 'CINZA';
   if (situacao === 'CONCLUÍDA') return 'AZUL';
-  if (atividades.some(function (item) { return calcularSaudeAtividadeMapro_(item) === 'VERMELHO'; })) {
+  const ativas = atividades.filter(function (item) {
+    return String(item.ATIVO || 'SIM').toUpperCase() !== 'NAO' &&
+      String(item.TIPO || '').toUpperCase() !== 'TOPICO';
+  });
+  if (ativas.some(function (item) { return calcularSaudeAtividadeMapro_(item) === 'VERMELHO'; })) {
     return 'VERMELHO';
   }
-  if (atividades.some(function (item) { return calcularSaudeAtividadeMapro_(item) === 'AMARELO'; })) {
+  if (ativas.some(function (item) { return calcularSaudeAtividadeMapro_(item) === 'AMARELO'; })) {
     return 'AMARELO';
   }
   return 'VERDE';
@@ -2890,9 +3030,15 @@ function atualizarResumoPersistidoMapro_(
     ]);
   }
   const situacao = calcularSituacaoProjetoMapro_(mapro.STATUS_MAPRO, atividades);
+  const situacaoNormalizada = normalizarSituacaoMapro_(situacao);
+  const concluiuAgora = situacaoNormalizada === 'CONCLUÍDA' &&
+    normalizarSituacaoMapro_(mapro.STATUS_MAPRO) !== 'CONCLUÍDA';
+  const concluidaEm = situacaoNormalizada === 'CONCLUÍDA'
+    ? (mapro.CONCLUIDA_EM || agora) : '';
   const novaVersao = Number(mapro.VERSION || 1) + 1;
   const linhaMaproAtualizada = CABECALHOS_MAPROS.map(function (cabecalho) {
     if (cabecalho === 'STATUS_MAPRO') return situacao;
+    if (cabecalho === 'CONCLUIDA_EM') return concluidaEm;
     if (cabecalho === 'ATUALIZADO_EM') return agora;
     if (cabecalho === 'DATA_INICIO') return resumo.dataInicio;
     if (cabecalho === 'DATA_FINAL') return resumo.dataFinal;
@@ -2901,6 +3047,16 @@ function atualizarResumoPersistidoMapro_(
   });
   abaMapros.getRange(linha, 1, 1, CABECALHOS_MAPROS.length)
     .setValues([linhaMaproAtualizada]);
+  if (concluiuAgora) {
+    const maproConcluida = Object.assign({}, mapro, {
+      STATUS_MAPRO: situacao,
+      CONCLUIDA_EM: concluidaEm,
+      DATA_INICIO: resumo.dataInicio,
+      DATA_FINAL: resumo.dataFinal,
+      ATUALIZADO_EM: agora
+    });
+    enviarEmailConclusaoProjetoMapro_(maproConcluida, atividades, concluidaEm);
+  }
   return {
     version: novaVersao,
     acompanhamentoIniciado: Boolean(mapro.ACOMPANHAMENTO_INICIADO_EM),
@@ -2913,6 +3069,97 @@ function atualizarResumoPersistidoMapro_(
     atividadesEmAtraso: resumo.atividadesEmAtraso,
     atividadesNaoAplicaveis: resumo.atividadesNaoAplicaveis
   };
+}
+
+function enviarEmailConclusaoProjetoMapro_(mapro, atividades, concluidaEm) {
+  try {
+    const destinatarios = {};
+    obterParticipantesAtivosMapro_(mapro.ID_MAPRO).forEach(function (participante) {
+      if (participante.email) destinatarios[participante.email] = true;
+    });
+    const emailLider = normalizarEmail_(mapro['EMAIL_LÍDER']);
+    if (emailLider) destinatarios[emailLider] = true;
+    const emails = Object.keys(destinatarios);
+    if (!emails.length) return false;
+    const operacionais = (atividades || []).filter(function (atividade) {
+      return String(atividade.ATIVO || 'SIM').toUpperCase() !== 'NAO' &&
+        String(atividade.TIPO || '').toUpperCase() !== 'TOPICO';
+    });
+    const inicioTexto = String(mapro.ACOMPANHAMENTO_INICIADO_EM || mapro.CRIADO_EM || '');
+    const inicio = new Date(inicioTexto);
+    const fim = new Date(concluidaEm || new Date().toISOString());
+    const dias = Number.isNaN(inicio.getTime()) || Number.isNaN(fim.getTime())
+      ? null : Math.max(0, Math.ceil((fim.getTime() - inicio.getTime()) / 86400000));
+    const duracao = dias == null ? 'Não calculado' : dias + (dias === 1 ? ' dia' : ' dias');
+    const url = montarUrlProjetoMapro_(mapro.ID_MAPRO);
+    const linhas = [
+      montarLinhaEmail_('ID da Mapro', formatarId_(Number(mapro.ID_MAPRO))),
+      montarLinhaEmail_('Nome do projeto', String(mapro.NOME_PROJETO || '')),
+      montarLinhaEmail_('Portfólio', String(mapro['PORTFÓLIO'] || '')),
+      montarLinhaEmail_('Líder do projeto', String(mapro['NOME_LÍDER'] || '')),
+      montarLinhaEmail_('E-mail do líder', String(mapro['EMAIL_LÍDER'] || '')),
+      montarLinhaEmail_('Departamento', String(mapro.DEPARTAMENTO || '')),
+      montarLinhaEmail_('Contagiro', String(mapro.CONTAGIRO || '')),
+      montarLinhaEmail_('Nível do projeto', String(mapro.NIVEL || '')),
+      montarLinhaEmail_('Início', formatarDataEmailMapro_(dataIsoMapro_(mapro.DATA_INICIO))),
+      montarLinhaEmail_('Prazo final', formatarDataEmailMapro_(dataIsoMapro_(mapro.DATA_FINAL))),
+      montarLinhaEmail_('Negócio', String(mapro.NEGOCIO || '')),
+      montarLinhaEmail_('Dimensão BSC', String(mapro.DIMENSAO_BSC || '')),
+      montarLinhaEmail_('Objetivo BSC', String(mapro.OBJETIVO_BSC || '')),
+      montarLinhaEmail_('O que é o projeto', String(mapro.O_QUE_E || '')),
+      montarLinhaEmail_('Por que', String(mapro.PORQUE || '')),
+      montarLinhaEmail_('Resultados esperados', String(mapro.RESULTADOS_ESPERADOS || '')),
+      montarLinhaEmail_('Indicadores', String(mapro.INDICADORES || '')),
+      montarLinhaEmail_('Processo crítico?', String(mapro.PROCESSO_CRITICO || '')),
+      montarLinhaEmail_('Envolve sistema?', String(mapro.ENVOLVE_SISTEMA || '')),
+      montarLinhaEmail_('Sistemas envolvidos', String(mapro.SISTEMAS_ENVOLVIDOS || '')),
+      montarLinhaEmail_('Total de atividades/subatividades', String(operacionais.length)),
+      montarLinhaEmail_('Tempo até a conclusão', duracao)
+    ].join('');
+    MailApp.sendEmail({
+      to: emails.join(','),
+      subject: '[MAPRO] Projeto concluído — ' + String(mapro.NOME_PROJETO || ''),
+      body: 'O projeto ' + String(mapro.NOME_PROJETO || '') + ' foi concluído.\n\n' +
+        'ID da Mapro: ' + formatarId_(Number(mapro.ID_MAPRO)) + '\n' +
+        'Portfólio: ' + String(mapro['PORTFÓLIO'] || '') + '\n' +
+        'Líder: ' + String(mapro['NOME_LÍDER'] || '') + '\n' +
+        'Contagiro: ' + String(mapro.CONTAGIRO || '') + '\n' +
+        'Nível: ' + String(mapro.NIVEL || '') + '\n' +
+        'Início: ' + formatarDataEmailMapro_(dataIsoMapro_(mapro.DATA_INICIO)) + '\n' +
+        'Prazo final: ' + formatarDataEmailMapro_(dataIsoMapro_(mapro.DATA_FINAL)) + '\n' +
+        'Negócio: ' + String(mapro.NEGOCIO || '') + '\n' +
+        'Dimensão BSC: ' + String(mapro.DIMENSAO_BSC || '') + '\n' +
+        'Objetivo BSC: ' + String(mapro.OBJETIVO_BSC || '') + '\n' +
+        'O que é o projeto: ' + String(mapro.O_QUE_E || '') + '\n' +
+        'Por que: ' + String(mapro.PORQUE || '') + '\n' +
+        'Resultados esperados: ' + String(mapro.RESULTADOS_ESPERADOS || '') + '\n' +
+        'Indicadores: ' + String(mapro.INDICADORES || '') + '\n' +
+        'Total de atividades/subatividades: ' + operacionais.length + '\n' +
+        'Tempo até a conclusão: ' + duracao + '\n\nAcessar projeto: ' + url +
+        '\n\nCORPORATIVO | P&G | SGI',
+      htmlBody: '<!doctype html><html><body style="margin:0;padding:0;background:#f3f4f7;font-family:Arial,sans-serif;color:#06063d">' +
+        '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f3f4f7;padding:28px 12px"><tr><td align="center">' +
+        '<table role="presentation" width="600" cellspacing="0" cellpadding="0" style="width:100%;max-width:600px;background:#fff;border-radius:16px;overflow:hidden">' +
+        '<tr><td align="center" style="background:#06063d;padding:16px;color:#fff;font-weight:800">SGI MAPRO</td></tr>' +
+        '<tr><td style="padding:30px 34px;font-size:14px;line-height:1.6">' +
+        '<p style="margin:0 0 8px;color:#087f19;font-size:12px;font-weight:800;text-transform:uppercase">Projeto concluído</p>' +
+        '<h1 style="margin:0 0 14px;font-size:22px">A Mapro foi concluída</h1>' +
+        '<p style="margin:0 0 20px">Todas as pessoas envolvidas estão sendo informadas sobre a conclusão do projeto.</p>' +
+        '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f7f7fa;border-radius:10px;margin-bottom:22px">' + linhas + '</table>' +
+        '<p style="text-align:center;margin:0"><a href="' + escaparHtml_(url) + '" style="display:inline-block;padding:14px 28px;border-radius:9px;background:#06063d;color:#fff;text-decoration:none;font-weight:800">ACESSAR PROJETO</a></p>' +
+        '</td></tr><tr><td align="center" style="background:#06063d;color:#fff;padding:15px;font-size:12px;font-weight:800">CORPORATIVO &nbsp;|&nbsp; P&amp;G &nbsp;|&nbsp; SGI</td></tr>' +
+        '</table></td></tr></table></body></html>',
+      name: 'SGI MAPRO'
+    });
+    return true;
+  } catch (erro) {
+    console.error(JSON.stringify({
+      acao: 'FALHA_EMAIL_CONCLUSAO_MAPRO',
+      maproId: mapro && mapro.ID_MAPRO,
+      erro: erro && erro.message
+    }));
+    return false;
+  }
 }
 
 function mapearLinhaAtividadeMapro_(registro) {
@@ -2959,6 +3206,115 @@ function persistirAtividadesAlteradasMapro_(
   }
 }
 
+/**
+ * Libera para reatribuição as atividades abertas de um usuário inativado. Itens
+ * concluídos ou não aplicáveis preservam o responsável para manter o histórico.
+ * Deve ser executada com o bloqueio de documento já adquirido pelo chamador.
+ */
+function prepararInativacaoResponsavelMapro_(usuario, realizadoPor) {
+  const idUsuario = String(Number(usuario.ID || 0));
+  if (!idUsuario || idUsuario === '0') return [];
+  const abaAtividades = obterAbaMaproAtividades_();
+  const atividades = lerRegistros_(abaAtividades, CABECALHOS_MAPRO_ATIVIDADES);
+  const assinaturas = atividades.map(assinarRegistroAtividadeMapro_);
+  const afetadasPorMapro = {};
+  const agora = new Date().toISOString();
+  atividades.forEach(function (atividade) {
+    if (!idsIguaisMapro_(atividade.ID_RESPONSAVEL, idUsuario) ||
+        String(atividade.ATIVO || 'SIM').toUpperCase() === 'NAO') return;
+    const status = String(atividade.STATUS_ATIVIDADE || '').toUpperCase();
+    if (['CONCLUIDA', 'NAO_APLICAVEL'].indexOf(status) !== -1) return;
+    const idMapro = String(Number(atividade.ID_MAPRO));
+    if (!afetadasPorMapro[idMapro]) afetadasPorMapro[idMapro] = [];
+    afetadasPorMapro[idMapro].push(String(atividade.NOME_ATIVIDADE || 'Atividade sem descrição'));
+    atividade.ID_RESPONSAVEL = '';
+    atividade.NOME_RESPONSAVEL = '';
+    atividade.DEPARTAMENTO = '';
+    atividade.ATUALIZADO_EM = agora;
+    atividade.VERSION = Number(atividade.VERSION || 1) + 1;
+  });
+  persistirAtividadesAlteradasMapro_(
+    abaAtividades, atividades, atividades.length, assinaturas
+  );
+  const abaParticipantes = obterAbaMaproParticipantes_();
+  const vinculos = lerRegistros_(abaParticipantes, CABECALHOS_MAPRO_PARTICIPANTES);
+  let alterouVinculo = false;
+  vinculos.forEach(function (vinculo) {
+    if ((idsIguaisMapro_(vinculo.ID_USUARIO, idUsuario) ||
+        normalizarEmail_(vinculo.EMAIL) === normalizarEmail_(usuario.EMAIL)) &&
+        String(vinculo.ATIVO || 'SIM').toUpperCase() !== 'NAO') {
+      vinculo.ATIVO = 'NAO';
+      alterouVinculo = true;
+    }
+  });
+  if (alterouVinculo && vinculos.length) {
+    abaParticipantes.getRange(2, 1, vinculos.length, CABECALHOS_MAPRO_PARTICIPANTES.length)
+      .setValues(vinculos.map(function (vinculo) {
+        return CABECALHOS_MAPRO_PARTICIPANTES.map(function (cabecalho) {
+          return vinculo[cabecalho] == null ? '' : vinculo[cabecalho];
+        });
+      }));
+  }
+  const maprosPorId = {};
+  lerRegistros_(obterAbaMapros_(), CABECALHOS_MAPROS).forEach(function (mapro) {
+    maprosPorId[String(Number(mapro.ID_MAPRO))] = mapro;
+  });
+  return Object.keys(afetadasPorMapro).map(function (idMapro) {
+    const mapro = maprosPorId[idMapro];
+    if (!mapro || !normalizarEmail_(mapro['EMAIL_LÍDER'])) return null;
+    return {
+      mapro: mapro,
+      usuario: {
+        nome: String(usuario.NOME || 'Usuário'),
+        email: normalizarEmail_(usuario.EMAIL)
+      },
+      atividades: afetadasPorMapro[idMapro],
+      destinatario: normalizarEmail_(mapro['EMAIL_LÍDER']),
+      realizadoPor: normalizarEmail_(realizadoPor)
+    };
+  }).filter(Boolean);
+}
+
+function enviarAvisosInativacaoResponsavelMapro_(avisos) {
+  (avisos || []).forEach(function (aviso) {
+    try {
+      const mapro = aviso.mapro;
+      const url = montarUrlProjetoMapro_(mapro.ID_MAPRO);
+      const listaTexto = aviso.atividades.map(function (nome) { return '- ' + nome; }).join('\n');
+      const listaHtml = aviso.atividades.map(function (nome) {
+        return '<li style="margin:0 0 6px">' + escaparHtml_(nome) + '</li>';
+      }).join('');
+      MailApp.sendEmail({
+        to: aviso.destinatario,
+        subject: '[MAPRO] Reatribuição de atividades necessária',
+        body: 'Olá!\n\nO usuário ' + aviso.usuario.nome +
+          ' foi inativado. As atividades abertas abaixo ficaram sem responsável e devem ser reatribuídas:\n\n' +
+          listaTexto + '\n\nAcessar projeto: ' + url + '\n\nCORPORATIVO | P&G | SGI',
+        htmlBody: '<!doctype html><html><body style="margin:0;padding:0;background:#f3f4f7;font-family:Arial,sans-serif;color:#06063d">' +
+          '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f3f4f7;padding:28px 12px"><tr><td align="center">' +
+          '<table role="presentation" width="580" cellspacing="0" cellpadding="0" style="width:100%;max-width:580px;background:#fff;border-radius:16px;overflow:hidden">' +
+          '<tr><td align="center" style="background:#06063d;padding:16px;color:#fff;font-weight:800">SGI MAPRO</td></tr>' +
+          '<tr><td style="padding:30px 34px;font-size:14px;line-height:1.6">' +
+          '<p style="margin:0 0 8px;color:#ec0e37;font-size:12px;font-weight:800;text-transform:uppercase">Reatribuição necessária</p>' +
+          '<h1 style="margin:0 0 14px;font-size:22px">Um responsável foi inativado</h1>' +
+          '<p>O usuário <strong>' + escaparHtml_(aviso.usuario.nome) + '</strong> foi inativado. As atividades abertas abaixo ficaram sem responsável:</p>' +
+          '<ul style="padding-left:20px">' + listaHtml + '</ul>' +
+          '<p><strong>Mapro:</strong> ' + escaparHtml_(formatarId_(Number(mapro.ID_MAPRO)) + ' — ' + String(mapro.NOME_PROJETO || '')) + '</p>' +
+          '<p style="text-align:center;margin:24px 0 0"><a href="' + escaparHtml_(url) + '" style="display:inline-block;padding:14px 28px;border-radius:9px;background:#06063d;color:#fff;text-decoration:none;font-weight:800">REATRIBUIR ATIVIDADES</a></p>' +
+          '</td></tr><tr><td align="center" style="background:#06063d;color:#fff;padding:15px;font-size:12px;font-weight:800">CORPORATIVO &nbsp;|&nbsp; P&amp;G &nbsp;|&nbsp; SGI</td></tr>' +
+          '</table></td></tr></table></body></html>',
+        name: 'SGI MAPRO'
+      });
+    } catch (erro) {
+      console.error(JSON.stringify({
+        acao: 'FALHA_EMAIL_INATIVACAO_RESPONSAVEL_MAPRO',
+        maproId: aviso && aviso.mapro && aviso.mapro.ID_MAPRO,
+        erro: erro && erro.message
+      }));
+    }
+  });
+}
+
 function calcularSituacaoProjetoMapro_(situacaoAtual, atividades) {
   const atual = String(situacaoAtual || '').toUpperCase();
   if (atual === 'CANCELADA' || atual === 'ARQUIVADA') return atual;
@@ -2970,17 +3326,56 @@ function calcularSituacaoProjetoMapro_(situacaoAtual, atividades) {
     if (atividade.ID_ATIVIDADE_PAI) pais[String(atividade.ID_ATIVIDADE_PAI)] = true;
   });
   const folhas = ativas.filter(function (atividade) {
-    return !pais[String(atividade.ID_ATIVIDADE)];
+    return String(atividade.TIPO || '').toUpperCase() !== 'TOPICO' &&
+      !pais[String(atividade.ID_ATIVIDADE)];
   });
-  if (!folhas.length) return 'EM_ANDAMENTO';
-  const aplicaveis = folhas.filter(function (atividade) {
-    return String(atividade.STATUS_ATIVIDADE).toUpperCase() !== 'NAO_APLICAVEL';
-  });
-  if (!aplicaveis.length) return 'NAO_APLICAVEL';
-  const todasConcluidas = aplicaveis.every(function (atividade) {
+  if (!folhas.length) return atual || 'AGUARDANDO_INICIO';
+  const naoAplicaveis = folhas.filter(function (atividade) {
+    return String(atividade.STATUS_ATIVIDADE).toUpperCase() === 'NAO_APLICAVEL';
+  }).length;
+  const concluidas = folhas.filter(function (atividade) {
     return String(atividade.STATUS_ATIVIDADE).toUpperCase() === 'CONCLUIDA';
+  }).length;
+  if (concluidas + naoAplicaveis !== folhas.length) return 'EM_ANDAMENTO';
+  if (naoAplicaveis / folhas.length > 0.5) return 'NAO_APLICAVEL';
+  if (concluidas / folhas.length > 0.5) return 'CONCLUIDA';
+  return 'EM_ANDAMENTO';
+}
+
+/** Corrige em lote a situação das Mapros antigas usando as atividades-folha atuais. */
+function recalcularSituacoesMaprosExistentes_(abaMapros, abaAtividades) {
+  if (abaMapros.getLastRow() < 2) return;
+  const mapros = lerRegistros_(abaMapros, CABECALHOS_MAPROS);
+  const porMapro = agruparAtividadesPorMapro_(
+    lerRegistros_(abaAtividades, CABECALHOS_MAPRO_ATIVIDADES)
+  );
+  let alterouStatus = false;
+  let alterouConclusao = false;
+  const status = [];
+  const conclusoes = [];
+  mapros.forEach(function (mapro) {
+    const atual = String(mapro.STATUS_MAPRO || '').toUpperCase();
+    const manterAguardando = ['AGUARDANDO_INICIO', 'AGUARDANDO_PREENCHIMENTO']
+      .indexOf(atual) !== -1 && !mapro.ACOMPANHAMENTO_INICIADO_EM;
+    const novo = manterAguardando ? atual : calcularSituacaoProjetoMapro_(
+      atual,
+      porMapro[String(Number(mapro.ID_MAPRO))] || []
+    );
+    const conclusao = normalizarSituacaoMapro_(novo) === 'CONCLUÍDA'
+      ? (mapro.CONCLUIDA_EM || mapro.ATUALIZADO_EM || new Date().toISOString()) : '';
+    status.push([novo]);
+    conclusoes.push([conclusao]);
+    if (novo !== atual) alterouStatus = true;
+    if (String(conclusao || '') !== String(mapro.CONCLUIDA_EM || '')) alterouConclusao = true;
   });
-  return todasConcluidas ? 'CONCLUIDA' : 'EM_ANDAMENTO';
+  if (alterouStatus) {
+    abaMapros.getRange(2, CABECALHOS_MAPROS.indexOf('STATUS_MAPRO') + 1, status.length, 1)
+      .setValues(status);
+  }
+  if (alterouConclusao) {
+    abaMapros.getRange(2, CABECALHOS_MAPROS.indexOf('CONCLUIDA_EM') + 1, conclusoes.length, 1)
+      .setValues(conclusoes);
+  }
 }
 
 function atualizarParticipantesLegadosMapro_(idMapro) {
@@ -3245,6 +3640,7 @@ function executarNotificacoesAtividadesMapro() {
 /** Handler privado do gatilho; não pode ser chamado pelo navegador. */
 function enviarNotificacoesAtividadesMapro_() {
   garantirBancoConfigurado_();
+  cancelarMaprosInativas_();
   const agora = new Date();
   const hoje = Utilities.formatDate(agora, 'America/Sao_Paulo', 'yyyy-MM-dd');
   const ontemData = new Date(agora.getTime() - 86400000);
@@ -3260,10 +3656,17 @@ function enviarNotificacoesAtividadesMapro_() {
     usuariosPorId[String(Number(usuario.ID))] = usuario;
   });
   const todasAtividades = lerRegistros_(obterAbaMaproAtividades_(), CABECALHOS_MAPRO_ATIVIDADES);
+  const idsComFilhos = {};
+  todasAtividades.forEach(function (atividade) {
+    if (String(atividade.ATIVO || 'SIM').toUpperCase() !== 'NAO' && atividade.ID_ATIVIDADE_PAI) {
+      idsComFilhos[String(atividade.ID_ATIVIDADE_PAI)] = true;
+    }
+  });
   const atividades = todasAtividades.filter(function (atividade) {
       const status = String(atividade.STATUS_ATIVIDADE || '').toUpperCase();
       return String(atividade.ATIVO || 'SIM').toUpperCase() !== 'NAO' &&
         String(atividade.TIPO || '').toUpperCase() !== 'TOPICO' &&
+        !idsComFilhos[String(atividade.ID_ATIVIDADE)] &&
         ['CONCLUIDA', 'NAO_APLICAVEL'].indexOf(status) === -1 &&
         Boolean(dataIsoMapro_(atividade.DATA_FINAL));
     });
@@ -3464,7 +3867,7 @@ function montarEmailReplanejamentoHtmlMapro_(mapro, atividade, numero, prazoAnte
 
 function formatarStatusAtividadeEmailMapro_(status) {
   const valores = {
-    PLANEJADA: 'Planejada',
+    PLANEJADA: 'Não iniciada',
     EM_ANDAMENTO: 'Em andamento',
     CONCLUIDA: 'Concluída',
     NAO_APLICAVEL: 'Não aplicável'
@@ -3531,7 +3934,7 @@ function calcularNumeracaoAtividadeMapro_(atividades, idAtividade) {
 }
 
 function formatarDataEmailMapro_(dataIso) {
-  const partes = String(dataIso || '').split('-');
+  const partes = dataIsoMapro_(dataIso).split('-');
   return partes.length === 3 ? partes[2] + '/' + partes[1] + '/' + partes[0] : '—';
 }
 

@@ -36,6 +36,20 @@
             <button id="abrir-mapro" class="botao-abrir-mapro" type="button" disabled>
               ABRIR MAPRO
             </button>
+            <div id="cards-status-mapros" class="cards-status-mapros" aria-label="Filtros rápidos por status">
+              <button class="card-status-lista-mapros card-atrasadas-mapros" type="button"
+                data-classificacao="ATRASADA" aria-pressed="false">
+                <span>MAPROS ATRASADAS</span><strong id="total-mapros-atrasadas">0</strong>
+              </button>
+              <button class="card-status-lista-mapros card-no-prazo-mapros" type="button"
+                data-classificacao="NO_PRAZO" aria-pressed="false">
+                <span>MAPROS NO PRAZO</span><strong id="total-mapros-no-prazo">0</strong>
+              </button>
+              <button class="card-status-lista-mapros card-concluidas-mapros" type="button"
+                data-classificacao="CONCLUIDA" aria-pressed="false">
+                <span>MAPROS CONCLUÍDAS</span><strong id="total-mapros-concluidas">0</strong>
+              </button>
+            </div>
           </div>
           <div class="grupo-ferramentas grupo-ferramentas-direita">
             <button id="verificar-inatividade" class="botao-icone acao-verificar" type="button" hidden
@@ -136,7 +150,7 @@
               <section class="bloco-matriz bloco-identificacao-mapro" aria-labelledby="titulo-identificacao-mapro">
                 <div class="cabecalho-titulo-identificacao-mapro">
                   <h2 id="titulo-identificacao-mapro" class="titulo-bloco-matriz">IDENTIFICAÇÃO DO PROJETO</h2>
-                  <button id="informacao-cabecalho-mapro" class="botao-informacao-cabecalho-mapro"
+                  <button id="informacao-cabecalho-mapro" class="botao-informacao-padrao-mapro botao-informacao-cabecalho-mapro"
                     type="button" aria-label="Informações sobre o preenchimento do cabeçalho"
                     title="Como preencher o cabeçalho">i</button>
                 </div>
@@ -259,15 +273,17 @@
                   </fieldset>
                   <fieldset class="pergunta-complementar-mapro">
                     <legend>O projeto envolverá algum sistema?</legend>
-                    <div class="opcoes-binarias-mapro">
-                      <label><input type="radio" name="mapro-envolve-sistema" value="SIM"><span>Sim</span></label>
-                      <label><input type="radio" name="mapro-envolve-sistema" value="NÃO"><span>Não</span></label>
+                    <div class="linha-resposta-sistemas-mapro">
+                      <div class="opcoes-binarias-mapro">
+                        <label><input type="radio" name="mapro-envolve-sistema" value="SIM"><span>Sim</span></label>
+                        <label><input type="radio" name="mapro-envolve-sistema" value="NÃO"><span>Não</span></label>
+                      </div>
+                      <label id="campo-sistemas-mapro" class="campo-sistemas-mapro" hidden>
+                        <span class="rotulo-acessivel-mapro">Sistema ou sistemas envolvidos</span>
+                        <textarea id="mapro-sistemas-envolvidos" minlength="3" maxlength="3000" rows="1"
+                          placeholder="Informe o nome do sistema ou dos sistemas envolvidos."></textarea>
+                      </label>
                     </div>
-                    <label id="campo-sistemas-mapro" class="campo-sistemas-mapro" hidden>
-                      <span>QUAL/QUAIS SISTEMAS?</span>
-                      <textarea id="mapro-sistemas-envolvidos" minlength="3" maxlength="3000" rows="3"
-                        placeholder="Informe o nome do sistema ou dos sistemas envolvidos."></textarea>
-                    </label>
                   </fieldset>
                 </div>
               </section>
@@ -310,8 +326,8 @@
                   <thead><tr>
                     <th aria-label="Ações"></th><th>Nº</th><th>DESCRIÇÃO</th><th>RESPONSÁVEL</th>
                     <th>DEPARTAMENTO</th><th>INÍCIO</th><th>SEMANA INÍCIO</th>
-                    <th>FINAL</th><th>SEMANA FINAL</th><th>PREDECESSORA</th><th>REPLANEJADO</th>
-                    <th>STATUS</th><th>SITUAÇÃO</th>
+                    <th>FINAL</th><th>SEMANA FINAL</th><th>STATUS</th><th>SITUAÇÃO</th>
+                    <th>PREDECESSORA</th><th>REPLANEJADO</th>
                     <th>JUSTIFICATIVA</th><th>OBSERVAÇÃO/MOTIVO</th><th>MAIS</th>
                   </tr></thead>
                   <tbody id="corpo-atividades-mapro"></tbody>
@@ -334,7 +350,6 @@
       <table id="tabela-cabecalho-fixo-atividades-mapro"
         class="tabela-usuarios tabela-atividades-mapro tabela-cabecalho-fixo-atividades-mapro"></table>
     </div>
-
     <div id="modal-informacao-cabecalho-mapro" class="fundo-modal" hidden>
       <section class="modal modal-informacao-cabecalho-mapro" role="dialog" aria-modal="true"
         aria-labelledby="titulo-modal-informacao-cabecalho-mapro">
@@ -489,12 +504,12 @@
     </div>
 
     <div id="modal-participantes-mapro" class="fundo-modal" hidden>
-      <section class="modal modal-confirmacao" role="dialog" aria-modal="true" aria-labelledby="titulo-modal-participantes-mapro">
+      <section class="modal modal-confirmacao modal-participantes-mapro" role="dialog" aria-modal="true" aria-labelledby="titulo-modal-participantes-mapro">
         <button class="fechar-modal" type="button" data-fechar-modal="modal-participantes-mapro" aria-label="Fechar">×</button>
         <div class="titulo-modal-participantes-mapro">
           <h2 id="titulo-modal-participantes-mapro">ADICIONAR PARTICIPANTES</h2>
           <button id="informacao-permissoes-participantes-mapro"
-            class="botao-informacao-participantes-mapro" type="button"
+            class="botao-informacao-padrao-mapro botao-informacao-participantes-mapro" type="button"
             aria-label="Informações sobre as permissões" title="Entenda as permissões">i</button>
         </div>
         <form id="formulario-participantes-mapro" class="formulario-participantes-mapro">

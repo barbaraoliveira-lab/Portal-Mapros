@@ -20,12 +20,32 @@
         </button>
       </header>
 
-      <section class="barra-abas-dashboard" aria-label="Visões do dashboard">
-        <button class="aba-dashboard ativa" type="button" data-aba="geral" aria-selected="true">VISÃO GERAL</button>
-        <button class="aba-dashboard" type="button" data-aba="atrasos" aria-selected="false">ATIVIDADES EM ATRASO <span id="contador-atrasos">0</span></button>
+      <section class="barra-abas-dashboard" aria-label="Controles do dashboard">
+        <nav class="abas-dashboard" role="tablist" aria-label="Visualizações">
+          <button class="aba-dashboard ativa" type="button" data-aba-dashboard="mapros"
+            id="aba-mapros-controle" role="tab" aria-selected="true"
+            aria-controls="aba-mapros-dashboard">MAPROS - VISÃO GERAL</button>
+          <button class="aba-dashboard" type="button" data-aba-dashboard="atividades"
+            id="aba-atividades-controle" role="tab" aria-selected="false"
+            aria-controls="aba-atividades-dashboard">MINHAS ATIVIDADES</button>
+        </nav>
+        <span id="atualizado-em-dashboard" class="atualizado-em-dashboard"
+          role="status">Atualizando dados...</span>
+        <button id="atualizar-dashboard" class="botao-atualizar-dashboard" type="button"
+          aria-label="Atualizar dados do dashboard" title="Atualizar dados">↻</button>
+        <div class="seletor-portfolio-dashboard">
+          <button id="abrir-portfolios-dashboard" type="button" aria-expanded="false" aria-controls="menu-selecao-portfolios">Todos os portfólios ▾</button>
+          <div id="menu-selecao-portfolios" hidden>
+            <input id="pesquisar-portfolio-dashboard" type="search" placeholder="Pesquisar portfólio" aria-label="Pesquisar portfólio">
+            <div id="opcoes-portfolios-dashboard"></div>
+          </div>
+        </div>
+        <button id="abrir-filtros-dashboard" class="botao-icone" type="button" aria-label="Filtros" aria-expanded="false" aria-controls="painel-filtros-dashboard">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4h18l-7 8v7l-4 2v-9z"/></svg>
+        </button>
       </section>
 
-      <section class="filtros-dashboard" aria-label="Filtros do dashboard">
+      <section id="painel-filtros-dashboard" hidden class="filtros-dashboard" aria-label="Filtros do dashboard">
         <label>Contagiro<select id="filtro-contagiro"><option value="">Todas</option></select></label>
         <label>Início de<input id="filtro-inicio-de" type="date"></label>
         <label>Início até<input id="filtro-inicio-ate" type="date"></label>
@@ -33,25 +53,55 @@
         <label>Prazo até<input id="filtro-prazo-ate" type="date"></label>
         <label>Status<select id="filtro-status"><option value="">Todos</option></select></label>
         <label>Área<select id="filtro-area"><option value="">Todas</option></select></label>
+        <label>Nível do projeto<select id="filtro-nivel"><option value="">Todos</option></select></label>
+        <label class="campo-filtro-lider-dashboard">Líder do projeto
+          <div class="seletor-lider-dashboard">
+            <input id="filtro-lider" type="search" placeholder="Pesquisar líder"
+              autocomplete="off" role="combobox" aria-autocomplete="list"
+              aria-expanded="false" aria-controls="opcoes-lider-dashboard">
+            <div id="opcoes-lider-dashboard" class="opcoes-lider-dashboard"
+              role="listbox" hidden></div>
+          </div>
+        </label>
         <label>Mapro<input id="filtro-mapro" type="search" placeholder="ID ou nome"></label>
-        <label>Portfólio<select id="filtro-portfolio"><option value="">Todos</option></select></label>
         <button id="limpar-filtros-dashboard" type="button">LIMPAR</button>
+      </section>
+
+      <section id="resumo-filtros-dashboard" class="resumo-filtros-dashboard"
+        aria-label="Filtros ativos" aria-live="polite" hidden>
+        <span class="rotulo-filtros-ativos-dashboard">FILTROS ATIVOS</span>
+        <div id="chips-filtros-dashboard" class="chips-filtros-dashboard"></div>
+        <button id="limpar-todos-filtros-dashboard" type="button">Limpar todos</button>
       </section>
 
       <div id="estado-dashboard" class="estado-tabela">Carregando dashboard...</div>
       <div id="layout-dashboard" class="layout-dashboard" hidden>
-        <aside class="painel-portfolios-dashboard">
-          <div class="cabecalho-portfolios-dashboard">
-            <h2>PORTFÓLIOS</h2>
-            <button id="alternar-portfolios-dashboard" type="button" aria-label="Recolher menu de portfólios" aria-expanded="true">‹</button>
-          </div>
-          <nav id="menu-portfolios-dashboard" class="menu-portfolios-dashboard"></nav>
-        </aside>
 
         <section class="conteudo-dashboard">
-          <div id="aba-geral-dashboard">
-            <section id="indicadores-dashboard" class="grade-indicadores-dashboard" aria-label="Indicadores"></section>
-            <section id="detalhes-indicador-dashboard" class="detalhes-indicador-dashboard" hidden
+          <div id="aba-mapros-dashboard" role="tabpanel"
+            aria-labelledby="aba-mapros-controle">
+            <section class="paineis-resumo-dashboard">
+              <article class="cartao-grafico-dashboard">
+                <div class="titulo-grafico-dashboard"><span>MEUS PROJETOS</span><h2>INDICADORES</h2></div>
+                <div id="indicadores-dashboard" class="grade-indicadores-dashboard"></div>
+              </article>
+              <article class="cartao-grafico-dashboard painel-graficos-resumo-dashboard">
+                <section class="bloco-grafico-operacional-dashboard">
+                  <div class="titulo-grafico-dashboard"><span>PORTFÓLIO DE PROJETOS</span><h2>% CONCLUSÃO</h2></div>
+                  <div class="area-rosca-dashboard">
+                    <canvas id="grafico-conclusao" width="210" height="210" role="img"
+                      aria-label="Distribuição das Mapros por percentual de conclusão"></canvas>
+                    <div id="legenda-conclusao" class="legenda-grafico-dashboard"
+                      aria-label="Filtrar por faixa de conclusão"></div>
+                  </div>
+                </section>
+                <section class="bloco-grafico-operacional-dashboard">
+                  <div class="titulo-grafico-dashboard"><span>VISÃO OPERACIONAL</span><h2>MAPROS POR PORTFÓLIO</h2></div>
+                  <div id="grafico-portfolios" class="grafico-barras-dashboard"></div>
+                </section>
+              </article>
+            </section>
+            <section id="detalhes-indicador-dashboard" class="detalhes-indicador-dashboard"
               aria-labelledby="titulo-detalhes-indicador-dashboard">
               <div class="cabecalho-detalhes-indicador-dashboard">
                 <div>
@@ -59,7 +109,21 @@
                   <h2 id="titulo-detalhes-indicador-dashboard"></h2>
                 </div>
                 <button id="fechar-detalhes-indicador-dashboard" type="button"
-                  aria-label="Fechar lista do indicador" title="Fechar">&times;</button>
+                  aria-label="Limpar filtro do indicador" title="Limpar filtro do indicador">&times;</button>
+              </div>
+              <div class="barra-tabela-dashboard">
+                <label><span>Pesquisar na tabela</span>
+                  <input id="pesquisa-tabela-mapros-dashboard" type="search"
+                    placeholder="Projeto, líder, portfólio ou status">
+                </label>
+                <label class="campo-tamanho-pagina-dashboard"><span>Linhas</span>
+                  <select id="tamanho-pagina-mapros-dashboard">
+                    <option value="20">20</option><option value="50">50</option>
+                    <option value="100">100</option>
+                  </select>
+                </label>
+                <span id="resumo-tabela-mapros-dashboard" class="resumo-tabela-dashboard"
+                  aria-live="polite"></span>
               </div>
               <div id="estado-detalhes-indicador-dashboard" class="estado-tabela"></div>
               <div id="tabela-detalhes-indicador-container" class="tabela-container" hidden>
@@ -67,36 +131,77 @@
                   <thead><tr>
                     <th>MAPRO</th><th>PROJETO</th><th>PORTFÓLIO</th><th>LÍDER</th>
                     <th>CONTAGIRO</th><th>ACOMPANHAMENTO INICIADO EM</th><th>PRAZO</th>
-                    <th>STATUS</th><th>CONCLUSÃO</th><th>MOTIVO DO CANCELAMENTO</th>
+                    <th>STATUS</th><th>CONCLUSÃO</th>
                   </tr></thead>
                   <tbody id="corpo-detalhes-indicador-dashboard"></tbody>
                 </table>
               </div>
-            </section>
-            <section id="tags-conclusao-dashboard" class="tags-conclusao-dashboard" aria-label="Faixas de conclusão"></section>
-            <section class="grade-graficos-dashboard">
-              <article class="cartao-grafico-dashboard">
-                <div class="titulo-grafico-dashboard"><span>PORTFÓLIO DE PROJETOS</span><h2>% CONCLUSÃO</h2></div>
-                <div class="area-rosca-dashboard"><canvas id="grafico-conclusao" width="360" height="260" aria-label="Distribuição por percentual de conclusão"></canvas><div id="legenda-conclusao" class="legenda-grafico-dashboard"></div></div>
-              </article>
-              <article class="cartao-grafico-dashboard">
-                <div class="titulo-grafico-dashboard"><span>VISÃO OPERACIONAL</span><h2>MAPROS POR STATUS</h2></div>
-                <div id="grafico-status" class="grafico-barras-dashboard"></div>
-              </article>
-              <article class="cartao-grafico-dashboard grafico-amplo-dashboard">
-                <div class="titulo-grafico-dashboard"><span>DISTRIBUIÇÃO</span><h2>MAPROS POR PORTFÓLIO</h2></div>
-                <div id="grafico-portfolios" class="grafico-barras-dashboard horizontal"></div>
-              </article>
+              <nav id="paginacao-mapros-dashboard" class="paginacao-dashboard"
+                aria-label="Paginação das Mapros" hidden>
+                <button type="button" data-pagina-mapros="anterior">Anterior</button>
+                <span id="pagina-mapros-dashboard"></span>
+                <button type="button" data-pagina-mapros="proxima">Próxima</button>
+              </nav>
             </section>
           </div>
 
-          <div id="aba-atrasos-dashboard" hidden>
-            <div id="estado-atrasos-dashboard" class="estado-tabela"></div>
-            <div id="tabela-atrasos-container" class="tabela-container" hidden>
-              <table class="tabela-usuarios tabela-atrasos-dashboard">
-                <thead><tr><th>MAPRO</th><th>PROJETO</th><th>PORTFÓLIO</th><th>ATIVIDADE</th><th>RESPONSÁVEL</th><th>PRAZO</th><th>DIAS EM ATRASO</th></tr></thead>
-                <tbody id="corpo-atrasos-dashboard"></tbody>
-              </table>
+          <div id="aba-atividades-dashboard" role="tabpanel"
+            aria-labelledby="aba-atividades-controle" hidden>
+            <div class="layout-atividades-dashboard">
+              <aside id="painel-indicadores-atividades-dashboard"
+                class="painel-indicadores-atividades-dashboard"
+                aria-label="Indicadores das minhas atividades">
+                <div class="cabecalho-indicadores-atividades-dashboard">
+                  <h2>INDICADORES</h2>
+                  <button id="alternar-painel-indicadores-atividades-dashboard" type="button"
+                    aria-label="Recolher indicadores" aria-expanded="true">‹</button>
+                </div>
+                <div id="indicadores-atividades-dashboard"
+                  class="grade-indicadores-atividades-dashboard"></div>
+              </aside>
+              <div class="conteudo-atividades-dashboard">
+                <section class="detalhes-indicador-dashboard tabela-minhas-atividades-dashboard"
+                  aria-labelledby="titulo-minhas-atividades-dashboard">
+                  <div class="cabecalho-detalhes-indicador-dashboard">
+                    <div>
+                      <span>ATIVIDADES ATRIBUÍDAS AO USUÁRIO</span>
+                      <h2 id="titulo-minhas-atividades-dashboard">TODAS AS MINHAS ATIVIDADES</h2>
+                    </div>
+                    <button id="limpar-filtro-atividades-dashboard" type="button" hidden
+                      aria-label="Limpar filtro das atividades" title="Limpar filtro">&times;</button>
+                  </div>
+                  <div class="barra-tabela-dashboard">
+                    <label><span>Pesquisar na tabela</span>
+                      <input id="pesquisa-tabela-atividades-dashboard" type="search"
+                        placeholder="Projeto, atividade, responsável ou situação">
+                    </label>
+                    <label class="campo-tamanho-pagina-dashboard"><span>Linhas</span>
+                      <select id="tamanho-pagina-atividades-dashboard">
+                        <option value="20">20</option><option value="50">50</option>
+                        <option value="100">100</option>
+                      </select>
+                    </label>
+                    <span id="resumo-tabela-atividades-dashboard"
+                      class="resumo-tabela-dashboard" aria-live="polite"></span>
+                  </div>
+                  <div id="estado-minhas-atividades-dashboard" class="estado-tabela"></div>
+                  <div id="tabela-minhas-atividades-container" class="tabela-container" hidden>
+                    <table class="tabela-usuarios tabela-detalhes-indicador-dashboard">
+                      <thead><tr>
+                        <th>MAPRO</th><th>PROJETO</th><th>PORTFÓLIO</th><th>ATIVIDADE</th>
+                        <th>RESPONSÁVEL</th><th>PRAZO</th><th>SITUAÇÃO</th><th>STATUS DO PRAZO</th>
+                      </tr></thead>
+                      <tbody id="corpo-minhas-atividades-dashboard"></tbody>
+                    </table>
+                  </div>
+                  <nav id="paginacao-atividades-dashboard" class="paginacao-dashboard"
+                    aria-label="Paginação das minhas atividades" hidden>
+                    <button type="button" data-pagina-atividades="anterior">Anterior</button>
+                    <span id="pagina-atividades-dashboard"></span>
+                    <button type="button" data-pagina-atividades="proxima">Próxima</button>
+                  </nav>
+                </section>
+              </div>
             </div>
           </div>
         </section>

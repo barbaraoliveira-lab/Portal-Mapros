@@ -73,6 +73,7 @@
                 <th scope="col">E-MAIL</th>
                 <th scope="col">MATRÍCULA</th>
                 <th scope="col">DEPARTAMENTO</th>
+                <th scope="col">ÁREAS RELACIONADAS</th>
                 <th scope="col">NÍVEL</th>
                 <th scope="col">STATUS</th>
                 <th scope="col">ATUALIZADO EM</th>
@@ -124,8 +125,16 @@
               <option value="">Selecione o nível</option>
               <option value="ADMIN">Administrador</option>
               <option value="PARTICIPANTE">Participante</option>
+              <option value="GERENTE">Gerente</option>
+              <option value="DIRETOR">Diretor</option>
             </select>
           </label>
+          <fieldset id="campo-areas-relacionadas-usuario"
+            class="campo-areas-relacionadas-usuario formulario-largura-total" hidden>
+            <legend>Áreas relacionadas</legend>
+            <p>Selecione as áreas cujas Mapros este usuário poderá consultar.</p>
+            <div id="opcoes-areas-relacionadas-usuario" class="opcoes-areas-relacionadas-usuario"></div>
+          </fieldset>
           <label>
             Status
             <select id="usuario-status" name="status" required>

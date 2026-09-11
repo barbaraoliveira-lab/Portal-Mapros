@@ -6,6 +6,7 @@
     todasMapros: [],
     listaInicialCarregada: false,
     filtros: {},
+    filtroClassificacao: '',
     portfoliosRecolhidos: false,
     maproSelecionada: null,
     detalhe: null,
@@ -218,8 +219,48 @@
         (!nomeFiltro || normalizar(mapro.nomeProjeto).indexOf(nomeFiltro) !== -1) &&
         (!statusFiltro || normalizar(mapro.situacao) === statusFiltro) &&
         (!filtros.dataInicio || mapro.dataInicio === filtros.dataInicio) &&
-        (!filtros.dataFinal || mapro.dataFinal === filtros.dataFinal);
+        (!filtros.dataFinal || mapro.dataFinal === filtros.dataFinal) &&
+        (!estadoMapros.filtroClassificacao ||
+          mapro.classificacaoPortfolio === estadoMapros.filtroClassificacao);
     });
+  }
+
+  function atualizarCardsStatusMapros() {
+    const filtros = estadoMapros.filtros || {};
+    const classificacoes = { ATRASADA: 0, NO_PRAZO: 0, CONCLUIDA: 0 };
+    const normalizar = function (valor) {
+      return String(valor || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        .toLocaleLowerCase('pt-BR').trim();
+    };
+    const idFiltro = String(filtros.id || '').trim().replace(/^0+/, '') || '';
+    estadoMapros.todasMapros.forEach(function (mapro) {
+      const idMapro = String(mapro.idMapro || '').replace(/^0+/, '') || '0';
+      const pertenceAoRecorte = (!estadoMapros.portfolio || mapro.portfolio === estadoMapros.portfolio) &&
+        (!idFiltro || idMapro === idFiltro) &&
+        (!filtros.nome || normalizar(mapro.nomeProjeto).indexOf(normalizar(filtros.nome)) !== -1) &&
+        (!filtros.status || normalizar(mapro.situacao) === normalizar(filtros.status)) &&
+        (!filtros.dataInicio || mapro.dataInicio === filtros.dataInicio) &&
+        (!filtros.dataFinal || mapro.dataFinal === filtros.dataFinal);
+      if (pertenceAoRecorte && Object.prototype.hasOwnProperty.call(
+        classificacoes, mapro.classificacaoPortfolio
+      )) classificacoes[mapro.classificacaoPortfolio] += 1;
+    });
+    document.getElementById('total-mapros-atrasadas').textContent = classificacoes.ATRASADA;
+    document.getElementById('total-mapros-no-prazo').textContent = classificacoes.NO_PRAZO;
+    document.getElementById('total-mapros-concluidas').textContent = classificacoes.CONCLUIDA;
+    document.querySelectorAll('.card-status-lista-mapros').forEach(function (card) {
+      const ativo = card.dataset.classificacao === estadoMapros.filtroClassificacao;
+      card.setAttribute('aria-pressed', String(ativo));
+    });
+  }
+
+  function alternarFiltroClassificacaoMapros(classificacao) {
+    estadoMapros.filtroClassificacao = estadoMapros.filtroClassificacao === classificacao
+      ? '' : classificacao;
+    estadoMapros.maproSelecionada = null;
+    document.getElementById('abrir-mapro').disabled = true;
+    estadoMapros.mapros = filtrarMaprosPagina(estadoMapros.portfolio);
+    renderizarTabelaMapros();
   }
 
   function abrirPesquisaMapros() {
@@ -258,6 +299,7 @@
     const estado = document.getElementById('estado-mapros');
     const tabela = document.getElementById('tabela-mapros-container');
     corpo.replaceChildren();
+    atualizarCardsStatusMapros();
     if (!estadoMapros.mapros.length) {
       estado.hidden = false;
       estado.textContent = 'Nenhuma Mapro foi encontrada neste portfólio.';
@@ -352,7 +394,7 @@
       if (mudouProjeto) estadoMapros.historicoDesfazer = [];
       estadoMapros.maproHistoricoId = String(idMapro);
       estadoMapros.rascunhosAtividades = [];
-      estadoMapros.modoEdicaoAtividades = false;
+      estadoMapros.modoEdicaoAtividades = !estadoMapros.detalhe.mapro.acompanhamentoIniciado;
       estadoMapros.idsAtividadesEditadas = {};
       estadoMapros.salvandoEdicoesAtividades = false;
       preencherCabecalhoMapro();
@@ -402,7 +444,8 @@
         return String(usuario.id) === String(atividade.idResponsavel);
       });
       if (responsavel) atividade.departamento = responsavel.departamento || '';
-      else if (atividade.idResponsavel) atividade.departamento = '';
+      // Responsáveis inativados continuam identificados em atividades já encerradas.
+      // Nas demais situações o servidor limpa o vínculo ao inativar o usuário.
     });
   }
 
@@ -472,15 +515,15 @@
     const modoAtivo = podeEditar && Boolean(estadoMapros.modoEdicaoAtividades);
     const estrutura = document.querySelector('.estrutura-corpo-projeto-mapro');
     const editar = document.getElementById('editar-atividades-mapro');
-    const salvar = document.getElementById('salvar-prazos-mapro');
     const criarTopico = document.getElementById('nova-atividade-raiz-mapro');
     if (estrutura) estrutura.classList.toggle('modo-edicao-ativo', modoAtivo);
+    editar.hidden = !estadoMapros.detalhe.mapro.acompanhamentoIniciado;
     editar.disabled = !podeEditar || modoAtivo;
     editar.classList.toggle('ativo', modoAtivo);
     editar.setAttribute('aria-pressed', modoAtivo ? 'true' : 'false');
-    salvar.disabled = !modoAtivo;
     criarTopico.disabled = !modoAtivo || !permissao.podeEditarTudo;
     atualizarBotaoDesfazerMapro();
+    atualizarBotaoSalvarPrazosMapro();
   }
 
   function habilitarEdicaoAtividadesMapro() {
@@ -823,6 +866,19 @@
     const textarea = document.getElementById('mapro-sistemas-envolvidos');
     campo.hidden = !envolveSistema;
     textarea.required = envolveSistema;
+    ajustarAlturaCampoSistemasMapro();
+  }
+
+  function ajustarAlturaCampoSistemasMapro() {
+    const textarea = document.getElementById('mapro-sistemas-envolvidos');
+    if (!textarea) return;
+    const fixo = document.getElementById('cabecalho-fixo-atividades-mapro');
+    if (fixo) fixo.hidden = true;
+    textarea.style.height = 'auto';
+    textarea.style.height = Math.min(180, Math.max(31, textarea.scrollHeight)) + 'px';
+    textarea.style.overflowY = textarea.scrollHeight > 180 ? 'auto' : 'hidden';
+    agendarCabecalhoFixoAtividadesMapro();
+    window.requestAnimationFrame(agendarCabecalhoFixoAtividadesMapro);
   }
 
   function obterDadosCabecalhoMapro() {
@@ -995,6 +1051,7 @@
     if (quadroCabecalhoFixoAtividadesMapro) return;
     quadroCabecalhoFixoAtividadesMapro = window.requestAnimationFrame(function () {
       quadroCabecalhoFixoAtividadesMapro = 0;
+      ajustarLarguraDescricaoMapro();
       atualizarCabecalhoFixoAtividadesMapro();
     });
   }
@@ -1006,20 +1063,49 @@
     const tabela = container && container.querySelector('.tabela-atividades-mapro');
     const cabecalho = tabela && tabela.tHead;
     const tituloCorpo = document.querySelector('.titulo-corpo-projeto');
+    const limparTituloFixo = function () {
+      if (!tituloCorpo) return;
+      tituloCorpo.classList.remove('titulo-corpo-projeto-fixo');
+      tituloCorpo.style.removeProperty('left');
+      tituloCorpo.style.removeProperty('width');
+    };
     if (!fixo || etapa.hidden || !container || container.hidden || !cabecalho) {
       if (fixo) fixo.hidden = true;
+      limparTituloFixo();
       return;
     }
 
     const barraDetalhe = document.querySelector('.barra-detalhe-mapro');
     const limiteSuperior = barraDetalhe
       ? Math.max(0, Math.ceil(barraDetalhe.getBoundingClientRect().bottom)) : 0;
-    if (tituloCorpo) tituloCorpo.style.top = limiteSuperior + 'px';
     const retanguloContainer = container.getBoundingClientRect();
+    const estrutura = tituloCorpo && tituloCorpo.closest('.estrutura-corpo-projeto-mapro');
+    const retanguloEstrutura = estrutura && estrutura.getBoundingClientRect();
+    const larguraTitulo = tituloCorpo ? tituloCorpo.getBoundingClientRect().height : 0;
+    const esquerdaTitulo = retanguloEstrutura ? Math.max(0, retanguloEstrutura.left) : 0;
+    const direitaTitulo = retanguloEstrutura
+      ? Math.min(window.innerWidth, retanguloEstrutura.right) : window.innerWidth;
+    const deveFixarTitulo = Boolean(tituloCorpo && retanguloEstrutura) &&
+      window.innerWidth > 760 && retanguloEstrutura.top < limiteSuperior &&
+      retanguloContainer.bottom > limiteSuperior + larguraTitulo + cabecalho.getBoundingClientRect().height &&
+      direitaTitulo > esquerdaTitulo;
+    if (tituloCorpo) {
+      tituloCorpo.style.top = limiteSuperior + 'px';
+      tituloCorpo.classList.toggle('titulo-corpo-projeto-fixo', deveFixarTitulo);
+      if (deveFixarTitulo) {
+        tituloCorpo.style.left = esquerdaTitulo + 'px';
+        tituloCorpo.style.width = direitaTitulo - esquerdaTitulo + 'px';
+      } else {
+        tituloCorpo.style.removeProperty('left');
+        tituloCorpo.style.removeProperty('width');
+      }
+    }
     const retanguloCabecalho = cabecalho.getBoundingClientRect();
     const retanguloTitulo = tituloCorpo && tituloCorpo.getBoundingClientRect();
-    const limiteCabecalho = retanguloTitulo
-      ? Math.max(limiteSuperior, Math.ceil(retanguloTitulo.bottom)) : limiteSuperior;
+    const limiteCabecalho = deveFixarTitulo
+      ? limiteSuperior + larguraTitulo
+      : retanguloTitulo
+        ? Math.max(limiteSuperior, Math.ceil(retanguloTitulo.bottom)) : limiteSuperior;
     const esquerdaVisivel = Math.max(0, retanguloContainer.left);
     const direitaVisivel = Math.min(window.innerWidth, retanguloContainer.right);
     const deveFixar = window.innerWidth > 760 && retanguloCabecalho.top < limiteCabecalho &&
@@ -1054,6 +1140,25 @@
     tabelaFixa.style.width = tabela.getBoundingClientRect().width + 'px';
     tabelaFixa.style.transform = 'translateX(' + (-container.scrollLeft) + 'px)';
     fixo.hidden = false;
+  }
+
+  function ajustarLarguraDescricaoMapro() {
+    const container = document.getElementById('tabela-atividades-container');
+    const tabela = container && container.querySelector('.tabela-atividades-mapro');
+    if (!tabela || container.hidden || container.clientWidth < 1000) return;
+    const cabecalho = tabela.tHead && tabela.tHead.rows[0];
+    if (!cabecalho) return;
+    // As primeiras onze colunas ocupam exatamente a janela; as demais ficam no scroll.
+    const larguras = [86, 42, 0, 190, 110, 108, 68, 108, 68, 54, 116, 260, 105, 190, 190, 58];
+    larguras[2] = Math.max(230, container.clientWidth - larguras.slice(0, 11).reduce((a, b) => a + b, 0));
+    let grupo = tabela.querySelector('colgroup');
+    if (!grupo) { grupo = document.createElement('colgroup'); tabela.prepend(grupo); }
+    grupo.replaceChildren();
+    larguras.forEach(function (largura) {
+      const col = document.createElement('col'); col.style.width = largura + 'px'; grupo.appendChild(col);
+    });
+    tabela.style.tableLayout = 'fixed';
+    tabela.style.width = larguras.reduce((a, b) => a + b, 0) + 'px';
   }
 
   function atualizarAgregadosTopicosClienteMapro(atividades) {
@@ -1284,7 +1389,7 @@
       adicionar.textContent = '+';
       adicionar.title = atividade.tipo === 'TOPICO' ? 'Adicionar atividade' : 'Adicionar subatividade';
       adicionar.setAttribute('aria-label', adicionar.title);
-      adicionar.disabled = Boolean(atividade.rascunho || !podeEditarTudo);
+      adicionar.disabled = !podeEditarTudo;
       adicionar.addEventListener('click', function () {
         adicionarRascunhoAtividadeMapro(atividade.idAtividade);
       });
@@ -1391,8 +1496,20 @@
       cancelar.title = 'Cancelar inclusão';
       cancelar.setAttribute('aria-label', 'Cancelar inclusão da atividade');
       cancelar.addEventListener('click', function () {
+        const remover = {};
+        remover[atividade.idAtividade] = true;
+        let encontrouDescendente = true;
+        while (encontrouDescendente) {
+          encontrouDescendente = false;
+          estadoMapros.rascunhosAtividades.forEach(function (item) {
+            if (!remover[item.idAtividade] && remover[item.idAtividadePai]) {
+              remover[item.idAtividade] = true;
+              encontrouDescendente = true;
+            }
+          });
+        }
         estadoMapros.rascunhosAtividades = estadoMapros.rascunhosAtividades.filter(function (item) {
-          return item.idAtividade !== atividade.idAtividade;
+          return !remover[item.idAtividade];
         });
         renderizarAtividadesMapro();
       });
@@ -1443,31 +1560,55 @@
     }
     linha.appendChild(celulaNome);
 
-    const usuarios = estadoMapros.detalhe.responsaveis.map(function (usuario) {
-      return { valor: usuario.id, texto: usuario.nome, departamento: usuario.departamento || '' };
-    });
-    const responsavelAtividade = criarSelectAtividadeMapro('idResponsavel', usuarios, atividade.idResponsavel);
-    responsavelAtividade.disabled = !podeEditarTudo;
-    linha.appendChild(criarCelulaControleMapro('Responsável', responsavelAtividade));
-    const departamentos = estadoMapros.detalhe.bases.departamentos.map(function (departamento) {
-      return { valor: departamento, texto: departamento };
-    });
-    const departamentoAtividade = criarSelectAtividadeMapro('departamento', departamentos, atividade.departamento);
-    departamentoAtividade.disabled = true;
-    responsavelAtividade.addEventListener('change', function () {
-      const responsavel = estadoMapros.detalhe.responsaveis.find(function (usuario) {
-        return String(usuario.id) === String(responsavelAtividade.value);
+    if (atividade.tipo === 'TOPICO' || temFilhos) {
+      const semResponsavel = document.createElement('output');
+      semResponsavel.className = 'campo-nao-aplicavel-hierarquia-mapro';
+      semResponsavel.textContent = '—';
+      semResponsavel.title = atividade.tipo === 'TOPICO'
+        ? 'Tópicos não possuem responsável' : 'O responsável é definido nas subatividades';
+      linha.appendChild(criarCelulaControleMapro('Responsável', semResponsavel));
+      const semDepartamento = semResponsavel.cloneNode(true);
+      linha.appendChild(criarCelulaControleMapro('Departamento', semDepartamento));
+    } else {
+      const usuarios = estadoMapros.detalhe.responsaveis.map(function (usuario) {
+        return { valor: usuario.id, texto: usuario.nome, departamento: usuario.departamento || '' };
       });
-      const departamento = responsavel ? responsavel.departamento || '' : '';
-      if (departamento && !Array.from(departamentoAtividade.options).some(function (opcao) {
-        return opcao.value === departamento;
+      if (atividade.idResponsavel && !usuarios.some(function (usuario) {
+        return String(usuario.valor) === String(atividade.idResponsavel);
       })) {
-        departamentoAtividade.appendChild(criarOpcaoMapros(departamento, departamento));
+        usuarios.unshift({
+          valor: atividade.idResponsavel,
+          texto: atividade.responsavel || 'Usuário inativo',
+          departamento: atividade.departamento || ''
+        });
       }
-      departamentoAtividade.value = departamento;
-      atividade.departamento = departamento;
-    });
-    linha.appendChild(criarCelulaControleMapro('Departamento', departamentoAtividade));
+      const responsavelAtividade = criarSelectAtividadeMapro(
+        'idResponsavel', usuarios, atividade.idResponsavel
+      );
+      responsavelAtividade.disabled = !podeEditarTudo;
+      linha.appendChild(criarCelulaControleMapro('Responsável', responsavelAtividade));
+      const departamentos = estadoMapros.detalhe.bases.departamentos.map(function (departamento) {
+        return { valor: departamento, texto: departamento };
+      });
+      const departamentoAtividade = criarSelectAtividadeMapro(
+        'departamento', departamentos, atividade.departamento
+      );
+      departamentoAtividade.disabled = true;
+      responsavelAtividade.addEventListener('change', function () {
+        const responsavel = estadoMapros.detalhe.responsaveis.find(function (usuario) {
+          return String(usuario.id) === String(responsavelAtividade.value);
+        });
+        const departamento = responsavel ? responsavel.departamento || '' : '';
+        if (departamento && !Array.from(departamentoAtividade.options).some(function (opcao) {
+          return opcao.value === departamento;
+        })) {
+          departamentoAtividade.appendChild(criarOpcaoMapros(departamento, departamento));
+        }
+        departamentoAtividade.value = departamento;
+        atividade.departamento = departamento;
+      });
+      linha.appendChild(criarCelulaControleMapro('Departamento', departamentoAtividade));
+    }
     const dataInicio = criarInputAtividadeMapro('date', atividade.dataInicio, 'dataInicio');
     dataInicio.disabled = temFilhos || atividade.tipo === 'TOPICO' || !podeEditarLinha;
     linha.appendChild(criarCelulaControleMapro('Início', dataInicio));
@@ -1482,6 +1623,20 @@
     semanaFinal.className = 'semana-final-atividade-mapro';
     semanaFinal.textContent = atividade.semanaFinal || formatarSemanaMapros(atividade.dataFinal);
     linha.appendChild(criarCelulaControleMapro('Semana final', semanaFinal));
+    const statusVisual = document.createElement('span');
+    const saude = atividade.saude || 'VERDE';
+    statusVisual.className = 'bolinha-status status-' + saude.toLowerCase();
+    statusVisual.title = descreverSaudeMapro(saude);
+    linha.appendChild(criarCelulaControleMapro('Status', statusVisual));
+    const situacoes = [
+      { valor: 'PLANEJADA', texto: 'Não iniciada' },
+      { valor: 'EM_ANDAMENTO', texto: 'Em andamento' },
+      { valor: 'CONCLUIDA', texto: 'Concluída' },
+      { valor: 'NAO_APLICAVEL', texto: 'Não aplicável' }
+    ];
+    const situacao = criarSelectAtividadeMapro('status', situacoes, atividade.status || 'PLANEJADA');
+    situacao.disabled = atividade.tipo === 'TOPICO' || !podeEditarLinha;
+    linha.appendChild(criarCelulaControleMapro('Situação', situacao));
     const predecessora = criarSelectAtividadeMapro(
       'idAtividadePredecessora', criarOpcoesPredecessorasMapro(atividade),
       atividade.idAtividadePredecessora || ''
@@ -1494,20 +1649,6 @@
     diasReplanejados.textContent = atividade.tipo === 'TOPICO'
       ? '—' : formatarDiasReplanejadosMapro(atividade.diasReplanejados);
     linha.appendChild(criarCelulaControleMapro('Replanejado', diasReplanejados));
-    const statusVisual = document.createElement('span');
-    const saude = atividade.saude || 'VERDE';
-    statusVisual.className = 'bolinha-status status-' + saude.toLowerCase();
-    statusVisual.title = descreverSaudeMapro(saude);
-    linha.appendChild(criarCelulaControleMapro('Status', statusVisual));
-    const situacoes = [
-      { valor: 'PLANEJADA', texto: 'Planejada' },
-      { valor: 'EM_ANDAMENTO', texto: 'Em andamento' },
-      { valor: 'CONCLUIDA', texto: 'Concluída' },
-      { valor: 'NAO_APLICAVEL', texto: 'Não aplicável' }
-    ];
-    const situacao = criarSelectAtividadeMapro('status', situacoes, atividade.status || 'PLANEJADA');
-    situacao.disabled = atividade.tipo === 'TOPICO' || !podeEditarLinha;
-    linha.appendChild(criarCelulaControleMapro('Situação', situacao));
     const justificativa = criarTextareaAtividadeMapro(
       atividade.justificativa,
       'justificativa',
@@ -1559,11 +1700,6 @@
         atividade.snapshotAntesEdicao = null;
         agendarSalvamentoAtividadeMapro(atividade, 0);
       });
-      if (controle.dataset.campo === 'dataInicio' || controle.dataset.campo === 'dataFinal') {
-        controle.addEventListener('blur', function () {
-          atualizarAtividadePelaLinhaMapro(atividade, linha, controle.dataset.campo, 'blur');
-        });
-      }
     });
     return linha;
   }
@@ -1713,6 +1849,8 @@
         );
         if (!resposta.sucesso) throw new Error(resposta.mensagem);
         Object.assign(atividade, resposta.dados && resposta.dados.atividade || {});
+        atividade.assinaturaSalva = assinaturaAtividadeMapro(atividade);
+        delete estadoMapros.idsAtividadesEditadas[atividade.idAtividade];
         delete estadoMapros.movimentosPendentes[atividade.idAtividade];
         const linhaAtual = document.querySelector('[data-atividade-id="' + atividade.idAtividade + '"]');
         if (linhaAtual) {
@@ -1736,7 +1874,7 @@
     if (!estadoMapros.modoEdicaoAtividades ||
         !estadoMapros.detalhe.permissao.podeEditarTudo) return;
     const idTemporario = 'rascunho-' + Date.now() + '-' + Math.random().toString(16).slice(2);
-    const pai = estadoMapros.detalhe.atividades.find(function (item) {
+    const pai = estadoMapros.detalhe.atividades.concat(estadoMapros.rascunhosAtividades).find(function (item) {
       return item.idAtividade === idPai;
     });
     if (pai && pai.tipo === 'ATIVIDADE') {
@@ -1788,17 +1926,21 @@
       dataIsoCompletaValidaMapros(atividade.dataFinal);
     const prazoInvalido = datasCompletas && atividade.dataFinal < atividade.dataInicio;
     const campoFinal = linha.querySelector('[data-campo="dataFinal"]');
-    const aguardandoSaidaDoPrazo = campoAlterado === 'dataFinal' && tipoEvento !== 'blur';
-    if (campoFinal) {
-      campoFinal.setCustomValidity(!aguardandoSaidaDoPrazo && prazoInvalido
+    const campoDataAlterado = campoAlterado === 'dataInicio' || campoAlterado === 'dataFinal';
+    const validacaoDeDataConcluida = tipoEvento === 'change' && campoDataAlterado;
+    if (campoFinal && campoDataAlterado) {
+      campoFinal.setCustomValidity(validacaoDeDataConcluida && prazoInvalido
         ? 'O prazo final não pode ser menor que o prazo inicial.' : '');
-      campoFinal.classList.toggle('campo-data-invalido-mapro', !aguardandoSaidaDoPrazo && prazoInvalido);
+      campoFinal.classList.toggle(
+        'campo-data-invalido-mapro', validacaoDeDataConcluida && prazoInvalido
+      );
     }
-    if (prazoInvalido && tipoEvento === 'blur' &&
-        (campoAlterado === 'dataInicio' || campoAlterado === 'dataFinal')) {
+    if (prazoInvalido && validacaoDeDataConcluida) {
       mostrarAvisoMapros('O prazo final não pode ser menor que o prazo inicial.', true);
     }
-    linha.dataset.erroPrazo = !aguardandoSaidaDoPrazo && prazoInvalido ? 'sim' : 'nao';
+    if (campoDataAlterado) {
+      linha.dataset.erroPrazo = validacaoDeDataConcluida && prazoInvalido ? 'sim' : 'nao';
+    }
     const houveReplanejamento = estadoMapros.detalhe.mapro.acompanhamentoIniciado &&
       !atividade.rascunho && (
       String(atividade.dataInicio || '') !== String(atividade.dataInicioRegistrada || '') ||
@@ -1807,8 +1949,7 @@
     linha.dataset.avisoReplanejamento = houveReplanejamento ? 'sim' : 'nao';
     atividade.replanejamentoPendente = houveReplanejamento;
     if (!houveReplanejamento) atividade.avisoReplanejamentoExibido = false;
-    if (houveReplanejamento && datasCompletas && !prazoInvalido && tipoEvento === 'blur' &&
-        (campoAlterado === 'dataInicio' || campoAlterado === 'dataFinal') &&
+    if (houveReplanejamento && datasCompletas && !prazoInvalido && validacaoDeDataConcluida &&
         !atividade.avisoReplanejamentoExibido) {
       atividade.avisoReplanejamentoExibido = true;
       mostrarAvisoMapros(
@@ -1857,7 +1998,8 @@
     const motivoReplanejamentoValido = !houveReplanejamento ||
       (atividade.observacao.trim().length >= 5 &&
         atividade.observacao.trim() !== String(atividade.observacaoRegistrada || '').trim());
-    if (atividade.tipo === 'TOPICO') return nomeValido && justificativaValida;
+    if (atividade.tipo === 'TOPICO' || estadoMapros.detalhe.atividades.concat(estadoMapros.rascunhosAtividades)
+        .some(item => item.idAtividadePai === atividade.idAtividade)) return nomeValido && justificativaValida;
     return nomeValido && Boolean(atividade.idResponsavel) && Boolean(atividade.departamento) &&
       dataIsoCompletaValidaMapros(atividade.dataInicio) &&
       dataIsoCompletaValidaMapros(atividade.dataFinal) &&
@@ -1872,12 +2014,21 @@
     ]);
   }
 
+  function atividadePossuiEdicaoPendenteMapro(atividade) {
+    return Boolean(atividade.rascunho) ||
+      assinaturaAtividadeMapro(atividade) !== atividade.assinaturaSalva;
+  }
+
   function agendarSalvamentoAtividadeMapro(atividade, atraso) {
     clearTimeout(temporizadoresAtividadesMapro[atividade.idAtividade]);
-    estadoMapros.idsAtividadesEditadas[atividade.idAtividade] = true;
+    const possuiAlteracao = atividadePossuiEdicaoPendenteMapro(atividade);
+    if (possuiAlteracao) estadoMapros.idsAtividadesEditadas[atividade.idAtividade] = true;
+    else delete estadoMapros.idsAtividadesEditadas[atividade.idAtividade];
     const linha = document.querySelector('[data-atividade-id="' + atividade.idAtividade + '"]');
-    if (linha) linha.classList.add('alteracao-pendente');
+    if (linha) linha.classList.toggle('alteracao-pendente', possuiAlteracao);
     atualizarBotaoSalvarPrazosMapro();
+    // A tabela é persistida exclusivamente pelo botão SALVAR EDIÇÕES. O parâmetro
+    // de atraso é mantido para compatibilidade com os listeners existentes.
   }
 
   async function salvarAtividadeInlineMapro(atividade, confirmarReplanejamento, propagarErro) {
@@ -1994,16 +2145,9 @@
         linha.classList.add('falha-salvamento');
       }
       if (!propagarErro) mostrarAvisoMapros(erro.message, true);
-      if (!propagarErro && erro.message === 'Falha de comunicação com o servidor.') {
-        agendarSalvamentoAtividadeMapro(atividade, 2500);
-      }
       if (propagarErro) throw erro;
     } finally {
       atividadeMaproEmSalvamento = false;
-      if (salvou && !atividade.replanejamentoPendente &&
-          assinaturaAtividadeMapro(atividade) !== atividade.assinaturaSalva) {
-        agendarSalvamentoAtividadeMapro(atividade, 0);
-      }
       if (autosaveMaproPendente) agendarAutosaveMapro(100);
     }
     return salvou;
@@ -2013,16 +2157,16 @@
     const botao = document.getElementById('salvar-prazos-mapro');
     if (!botao || !estadoMapros.detalhe) return;
     botao.disabled = !estadoMapros.modoEdicaoAtividades ||
-      estadoMapros.salvandoEdicoesAtividades || !usuarioPodeEditarTabelaAtividadesMapro();
+      estadoMapros.salvandoEdicoesAtividades || !usuarioPodeEditarTabelaAtividadesMapro() ||
+      !temEdicoesAtividadesPendentesMapro();
     botao.textContent = '💾 SALVAR EDIÇÕES';
   }
 
   function obterAtividadesComEdicaoPendenteMapro() {
     if (!estadoMapros.detalhe) return [];
     return estadoMapros.detalhe.atividades.concat(estadoMapros.rascunhosAtividades).filter(function (atividade) {
-      return podeEditarAtividadeClienteMapro(atividade) && (
-        atividade.rascunho || estadoMapros.idsAtividadesEditadas[atividade.idAtividade]
-      );
+      return podeEditarAtividadeClienteMapro(atividade) &&
+        atividadePossuiEdicaoPendenteMapro(atividade);
     });
   }
 
@@ -2050,7 +2194,8 @@
         focarCampoEdicaoAtividadeMapro(atividade, 'justificativa');
         return false;
       }
-      if (atividade.tipo === 'TOPICO') continue;
+      if (atividade.tipo === 'TOPICO' || estadoMapros.detalhe.atividades.concat(estadoMapros.rascunhosAtividades)
+          .some(item => item.idAtividadePai === atividade.idAtividade)) continue;
       if (!atividade.idResponsavel || !atividade.departamento) {
         mostrarAvisoMapros('Selecione o responsável da atividade antes de salvar.', true);
         focarCampoEdicaoAtividadeMapro(atividade, 'idResponsavel');
@@ -2095,6 +2240,7 @@
   }
 
   async function salvarEdicoesAtividadesMapro() {
+    await filaSalvamentoAtividadesMapro;
     if (!estadoMapros.modoEdicaoAtividades || estadoMapros.salvandoEdicoesAtividades) return;
     const porId = {};
     estadoMapros.detalhe.atividades.concat(estadoMapros.rascunhosAtividades)
@@ -2109,6 +2255,10 @@
         profundidadePredecessoraMapro(b, porId) - profundidadePredecessoraMapro(a, porId) ||
         ordemTipo[a.tipo] - ordemTipo[b.tipo] || Number(a.ordem || 0) - Number(b.ordem || 0);
     });
+    if (!pendentes.length) {
+      atualizarBotaoSalvarPrazosMapro();
+      return;
+    }
     if (!validarEdicoesAtividadesMapro(pendentes)) return;
 
     estadoMapros.salvandoEdicoesAtividades = true;
@@ -2164,7 +2314,7 @@
       document.getElementById('mapro-semana-final').textContent =
         formatarSemanaMapros(resumo.dataFinal);
       estadoMapros.idsAtividadesEditadas = {};
-      estadoMapros.modoEdicaoAtividades = false;
+      estadoMapros.modoEdicaoAtividades = !estadoMapros.detalhe.mapro.acompanhamentoIniciado;
       renderizarAtividadesMapro();
       mostrarAvisoMapros(resposta.mensagem || 'Edições salvas com sucesso.');
     } catch (erro) {
@@ -2447,6 +2597,8 @@
         );
         if (!resposta.sucesso) throw new Error(resposta.mensagem);
         Object.assign(atividade, resposta.dados && resposta.dados.atividade || {});
+        atividade.assinaturaSalva = assinaturaAtividadeMapro(atividade);
+        delete estadoMapros.idsAtividadesEditadas[atividade.idAtividade];
         const resumo = resposta.dados && resposta.dados.resumoProjeto || {};
         if (resumo.version) {
           estadoMapros.detalhe.mapro.version = resumo.version;
@@ -2558,6 +2710,11 @@
     }
   }
 
+  function normalizarPesquisaParticipanteMapro(valor) {
+    return String(valor || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .toLocaleLowerCase('pt-BR').trim();
+  }
+
   function abrirModalParticipantesMapro() {
     const atuais = {};
     estadoMapros.detalhe.participantes.forEach(function (item) { atuais[item.email] = item; });
@@ -2568,6 +2725,9 @@
       if (atual && atual.papel === 'LIDER') return;
       const label = document.createElement('label');
       label.className = 'opcao-participante-mapro';
+      label.dataset.pesquisa = normalizarPesquisaParticipanteMapro(
+        String(usuario.nome || '') + ' ' + String(usuario.email || '')
+      );
       const checkbox = document.createElement('input');
       checkbox.type = 'checkbox';
       checkbox.value = usuario.id;
@@ -2601,6 +2761,7 @@
     });
     document.getElementById('pesquisa-participante-mapro').value = '';
     abrirModalMapros('modal-participantes-mapro');
+    document.getElementById('pesquisa-participante-mapro').focus();
   }
 
   async function salvarParticipantesMapro(evento) {
@@ -2755,7 +2916,14 @@
     }
   }
 
+  async function salvarPendenciasAutomaticasAtividadesMapro() {
+    // Mantida como barreira de compatibilidade: o corpo do projeto não salva
+    // automaticamente. Somente o cabeçalho conserva o autosave independente.
+    return Promise.resolve();
+  }
+
   async function voltarParaListaMapros() {
+    await salvarPendenciasAutomaticasAtividadesMapro();
     if (temJustificativaObrigatoriaPendenteMapro()) {
       mostrarAvisoMapros('Obrigatório o preenchimento da justificativa.', true);
       return;
@@ -2765,7 +2933,10 @@
       return;
     }
     if (temEdicoesAtividadesPendentesMapro()) {
-      mostrarAvisoMapros('Clique em SALVAR EDIÇÕES antes de sair do projeto.', true);
+      mostrarAvisoMapros(
+        'Clique em SALVAR EDIÇÕES antes de sair do projeto.',
+        true
+      );
       return;
     }
     MaproUI.showLoading('Salvando alterações...');
@@ -2793,13 +2964,18 @@
   }
 
   async function imprimirProjetoMapro() {
+    if (temEdicoesAtividadesPendentesMapro()) {
+      mostrarAvisoMapros('Clique em SALVAR EDIÇÕES antes de gerar o PDF.', true);
+      return;
+    }
     const botao = document.getElementById('imprimir-pdf-mapro');
     botao.disabled = true;
     MaproUI.showLoading('Gerando PDF...');
     await aguardarPinturaMapros();
     try {
       const mapro = estadoMapros.detalhe.mapro;
-      const origem = document.getElementById('conteudo-detalhe-mapro');
+      await aguardarAutosaveCabecalhoMapro();
+      const origem = document.getElementById('etapa-detalhe-mapro');
       const copia = origem.cloneNode(true);
       const controlesOriginais = origem.querySelectorAll('input, select, textarea');
       const controlesCopia = copia.querySelectorAll('input, select, textarea');
@@ -2807,21 +2983,46 @@
         const clone = controlesCopia[indice];
         if (!clone) return;
         if (controle.tagName === 'SELECT') {
-          Array.from(clone.options).forEach(function (opcao, indiceOpcao) {
-            opcao.selected = indiceOpcao === controle.selectedIndex;
-          });
+          const opcao = controle.options[controle.selectedIndex];
+          const valor = document.createElement('span');
+          valor.className = 'valor-controle-pdf-mapro';
+          valor.textContent = opcao && opcao.textContent.trim()
+            ? opcao.textContent.trim() : (controle.value || '—');
+          clone.replaceWith(valor);
           return;
         }
         if (controle.tagName === 'TEXTAREA') {
-          clone.textContent = controle.value;
+          const valor = document.createElement('div');
+          valor.className = 'valor-controle-pdf-mapro valor-multilinha-pdf-mapro';
+          valor.textContent = controle.value || '—';
+          clone.replaceWith(valor);
           return;
         }
-        if (controle.type !== 'file') clone.setAttribute('value', controle.value);
+        if (controle.type === 'radio' || controle.type === 'checkbox') {
+          if (controle.checked) clone.setAttribute('checked', 'checked');
+          else clone.removeAttribute('checked');
+          return;
+        }
+        if (controle.type === 'hidden' || controle.type === 'file') {
+          clone.remove();
+          return;
+        }
+        const valor = document.createElement('span');
+        valor.className = 'valor-controle-pdf-mapro';
+        valor.textContent = controle.value || '—';
+        clone.replaceWith(valor);
       });
       copia.querySelectorAll('.fundo-modal, .acoes-formulario-mapros').forEach(function (elemento) {
         elemento.remove();
       });
-      const resposta = await chamarServidorMapros('gerarPdfProjetoMapro', mapro.idMapro, copia.outerHTML);
+      const documento = document.createElement('div');
+      documento.className = 'documento-pdf-mapro';
+      documento.appendChild(copia);
+      const rodape = document.getElementById('rodape-projeto-mapros');
+      if (rodape) documento.appendChild(rodape.cloneNode(true));
+      const resposta = await chamarServidorMapros(
+        'gerarPdfProjetoMapro', mapro.idMapro, documento.outerHTML
+      );
       if (!resposta.sucesso) throw new Error(resposta.mensagem);
       const dados = resposta.dados || {};
       const binario = window.atob(String(dados.conteudoBase64 || ''));
@@ -2874,10 +3075,10 @@
     }
   }
 
-  function abrirConfirmacaoAcompanhamentoMapro() {
+  async function abrirConfirmacaoAcompanhamentoMapro() {
     if (!estadoMapros.detalhe || estadoMapros.detalhe.mapro.acompanhamentoIniciado) return;
     if (temEdicoesAtividadesPendentesMapro() || temReplanejamentoPendenteMapro()) {
-      mostrarAvisoMapros('Clique em SALVAR EDIÇÕES antes de iniciar o acompanhamento.', true);
+      mostrarAvisoMapros('Complete os campos pendentes e clique em SALVAR EDIÇÕES antes de iniciar.', true);
       return;
     }
     abrirModalMapros('modal-iniciar-acompanhamento');
@@ -2899,6 +3100,9 @@
       estadoMapros.detalhe.mapro.version = resposta.dados.version;
       document.getElementById('mapro-version').value = resposta.dados.version;
       document.getElementById('iniciar-acompanhamento-mapro').hidden = true;
+      estadoMapros.modoEdicaoAtividades = false;
+      renderizarAtividadesMapro();
+      atualizarEstadoModoEdicaoAtividadesMapro();
       fecharModalMapros('modal-iniciar-acompanhamento');
       mostrarAvisoMapros(resposta.mensagem);
     } catch (erro) {
@@ -2922,7 +3126,7 @@
 
   function formatarSituacaoAtividadeMapro(valor) {
     const mapa = {
-      PLANEJADA: 'Planejada', EM_ANDAMENTO: 'Em andamento',
+      PLANEJADA: 'Não iniciada', EM_ANDAMENTO: 'Em andamento',
       CONCLUIDA: 'Concluída', NAO_APLICAVEL: 'Não aplicável'
     };
     return mapa[valor] || valor;
@@ -3025,6 +3229,11 @@
     }
   });
   document.getElementById('abrir-mapro').addEventListener('click', abrirProjetoSelecionado);
+  document.querySelectorAll('.card-status-lista-mapros').forEach(function (card) {
+    card.addEventListener('click', function () {
+      alternarFiltroClassificacaoMapros(card.dataset.classificacao);
+    });
+  });
   document.getElementById('alternar-painel-portfolios')
     .addEventListener('click', alternarPainelPortfolios);
   document.getElementById('verificar-inatividade').addEventListener('click', abrirConfirmacaoInatividadeMapros);
@@ -3068,6 +3277,8 @@
   document.querySelectorAll('input[name="mapro-envolve-sistema"]').forEach(function (campo) {
     campo.addEventListener('change', atualizarCampoSistemasMapro);
   });
+  document.getElementById('mapro-sistemas-envolvidos')
+    .addEventListener('input', ajustarAlturaCampoSistemasMapro);
   document.getElementById('informacao-cabecalho-mapro').addEventListener('click', function () {
     abrirModalMapros('modal-informacao-cabecalho-mapro');
     document.querySelector('#modal-informacao-cabecalho-mapro .fechar-modal').focus();
@@ -3124,11 +3335,12 @@
     observadorCabecalhoFixo.observe(document.getElementById('tabela-atividades-container'));
     observadorCabecalhoFixo.observe(document.querySelector('.tabela-atividades-mapro'));
     observadorCabecalhoFixo.observe(document.querySelector('.barra-detalhe-mapro'));
+    observadorCabecalhoFixo.observe(document.querySelector('.cartao-cabecalho-mapro'));
   }
   document.getElementById('pesquisa-participante-mapro').addEventListener('input', function () {
-    const termo = this.value.trim().toLocaleLowerCase('pt-BR');
+    const termo = normalizarPesquisaParticipanteMapro(this.value);
     document.querySelectorAll('.opcao-participante-mapro').forEach(function (item) {
-      item.hidden = Boolean(termo) && item.textContent.toLocaleLowerCase('pt-BR').indexOf(termo) === -1;
+      item.hidden = Boolean(termo) && String(item.dataset.pesquisa || '').indexOf(termo) === -1;
     });
   });
   document.querySelectorAll('[data-fechar-modal]').forEach(function (botao) {

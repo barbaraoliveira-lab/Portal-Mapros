@@ -3,7 +3,14 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 
-const contexto = { console };
+const contexto = {
+  console,
+  Utilities: {
+    formatDate(valor) {
+      return new Date(valor).toISOString().slice(0, 10);
+    }
+  }
+};
 vm.createContext(contexto);
 vm.runInContext(
   fs.readFileSync(path.join(__dirname, '..', 'Mapros.js'), 'utf8'),
@@ -76,5 +83,12 @@ assert.throws(function () {
 assert.throws(function () {
   contexto.validarArquivoEvidenciaMapro_('.pdf', 'text/html');
 }, /Formato de evidência não permitido/);
+
+assert.equal(contexto.formatarDataEmailMapro_('2026-09-04'), '04/09/2026');
+assert.equal(
+  contexto.formatarDataEmailMapro_(new Date('2026-09-04T12:00:00Z')),
+  '04/09/2026',
+  'o e-mail deve formatar datas retornadas pelo Google Sheets como objetos Date'
+);
 
 console.log('Testes de persistência incremental concluídos com sucesso.');

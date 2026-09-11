@@ -46,8 +46,14 @@ escopo usado pela página de Mapros: administradores recebem todos os projetos e
 demais usuários recebem somente aqueles com vínculo ativo ou liderança. Filtros e
 gráficos operam no navegador exclusivamente sobre esse conjunto já autorizado.
 
-As visões “Visão geral” e “Atividades em atraso” compartilham filtros de Contagiro,
-início, prazo, status, área, Mapro e portfólio. O tempo médio de conclusão usa o intervalo
-entre a data inicial derivada das atividades e `ATUALIZADO_EM` das Mapros concluídas.
-Essa é uma aproximação enquanto o modelo não possuir um timestamp específico para a
-conclusão do projeto.
+As visões “Mapros - Visão geral” e “Minhas atividades” compartilham somente o recorte
+de portfólio. Os filtros corporativos de Contagiro, início, prazo, status, área, nível,
+líder e Mapro pertencem à visão geral e deixam de afetar os resultados quando estão
+ocultos na visão pessoal.
+
+Na visão geral, cards, faixas de conclusão e barras por portfólio atuam como filtros
+cruzados. Cada seleção atualiza os demais gráficos e a tabela, e aparece como um chip
+removível. As tabelas possuem pesquisa local, ordenação, paginação, cabeçalho e primeira
+coluna fixos, além de acesso direto à Mapro selecionada. O tempo médio de conclusão usa
+o intervalo entre a data inicial derivada das atividades e `CONCLUIDA_EM`, com
+`ATUALIZADO_EM` apenas como compatibilidade para registros antigos.

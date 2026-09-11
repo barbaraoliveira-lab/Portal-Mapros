@@ -1,10 +1,27 @@
 <script>
   const estadoDashboard = {
-    dados: null, projetos: [], filtrados: [], aba: 'geral', portfolio: '',
-    indicadorDetalhe: ''
+    dados: null,
+    projetos: [],
+    filtrados: [],
+    portfolios: [],
+    aba: 'mapros',
+    menuIndicadoresAtividadesRecolhido: false,
+    indicadorDetalhe: '',
+    indicadorAtividades: '',
+    filtroFaixaConclusao: '',
+    filtroGraficoPortfolio: '',
+    buscaTabelaMapros: '',
+    buscaTabelaAtividades: '',
+    paginaMapros: 1,
+    paginaAtividades: 1,
+    tamanhoPaginaMapros: 20,
+    tamanhoPaginaAtividades: 20,
+    ordenacaoMapros: {campo: 'id', direcao: 'asc'},
+    ordenacaoAtividades: {campo: 'prazo', direcao: 'asc'},
+    atualizadoEm: '',
+    carregando: false,
+    segmentosRosca: []
   };
-  const coresConclusaoDashboard = ['#ef625d', '#42d779', '#ff9f43', '#16c7d8'];
-
   function chamarServidorDashboard(nome, ...argumentos) {
     return new Promise(function (resolve, reject) {
       google.script.run.withSuccessHandler(resolve).withFailureHandler(function () {
@@ -14,12 +31,25 @@
   }
 
   async function iniciarDashboard() {
+    if (estadoDashboard.carregando) return;
+    estadoDashboard.carregando = true;
+    const botaoAtualizar = document.getElementById('atualizar-dashboard');
+    botaoAtualizar.disabled = true;
+    botaoAtualizar.setAttribute('aria-busy', 'true');
     MaproUI.showLoading('Carregando indicadores...');
     try {
       const resposta = await chamarServidorDashboard('carregarDashboardMapro');
       if (!resposta.sucesso) throw new Error(resposta.mensagem);
       estadoDashboard.dados = resposta.dados;
       estadoDashboard.projetos = resposta.dados.projetos || [];
+      const portfoliosDisponiveis = valoresUnicosDashboard('portfolio');
+      estadoDashboard.portfolios = estadoDashboard.portfolios.filter(function (portfolio) {
+        return portfoliosDisponiveis.includes(portfolio);
+      });
+      if (!portfoliosDisponiveis.includes(estadoDashboard.filtroGraficoPortfolio)) {
+        estadoDashboard.filtroGraficoPortfolio = '';
+      }
+      estadoDashboard.atualizadoEm = resposta.dados.atualizadoEm || new Date().toISOString();
       document.getElementById('logo-dashboard').src = resposta.dados.logoUrl;
       document.getElementById('logo-empresa-dashboard').src = resposta.dados.logoEmpresaUrl;
       document.getElementById('escopo-dashboard').textContent = resposta.dados.admin
@@ -27,16 +57,30 @@
         : 'Minha visão · somente projetos relacionados';
       preencherFiltrosDashboard();
       montarMenuPortfoliosDashboard();
+      atualizarRotuloPortfoliosDashboard();
       document.getElementById('estado-dashboard').hidden = true;
       document.getElementById('layout-dashboard').hidden = false;
+      atualizarMomentoDashboard();
       aplicarFiltrosDashboard();
     } catch (erro) {
       const estado = document.getElementById('estado-dashboard');
       estado.textContent = erro.message;
       estado.classList.add('falha');
     } finally {
+      estadoDashboard.carregando = false;
+      botaoAtualizar.disabled = false;
+      botaoAtualizar.setAttribute('aria-busy', 'false');
       MaproUI.hideLoading();
     }
+  }
+
+  function atualizarMomentoDashboard() {
+    const data = new Date(estadoDashboard.atualizadoEm || Date.now());
+    const rotulo = Number.isNaN(data.getTime()) ? '' : new Intl.DateTimeFormat('pt-BR', {
+      timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit', hour12: false
+    }).format(data);
+    document.getElementById('atualizado-em-dashboard').textContent =
+      rotulo ? 'Atualizado às ' + rotulo : 'Dados atualizados';
   }
 
   function valoresUnicosDashboard(campo) {
@@ -47,73 +91,181 @@
 
   function preencherSelectDashboard(id, valores) {
     const select = document.getElementById(id);
+    const valorAtual = select.value;
+    while (select.options.length > 1) select.remove(1);
     valores.forEach(function (valor) {
       const opcao = document.createElement('option');
       opcao.value = valor;
       opcao.textContent = valor;
       select.appendChild(opcao);
     });
+    if (valores.includes(valorAtual)) select.value = valorAtual;
   }
 
   function preencherFiltrosDashboard() {
     preencherSelectDashboard('filtro-contagiro', valoresUnicosDashboard('contagiro'));
     preencherSelectDashboard('filtro-status', valoresUnicosDashboard('status'));
     preencherSelectDashboard('filtro-area', valoresUnicosDashboard('area'));
-    preencherSelectDashboard('filtro-portfolio', valoresUnicosDashboard('portfolio'));
+    preencherSelectDashboard('filtro-nivel', valoresUnicosDashboard('nivel'));
+    montarOpcoesLiderDashboard();
+  }
+
+  function montarOpcoesLiderDashboard() {
+    const campo = document.getElementById('filtro-lider');
+    const lista = document.getElementById('opcoes-lider-dashboard');
+    const busca = normalizarBuscaDashboard(campo.value);
+    lista.replaceChildren();
+    const todos = document.createElement('button');
+    todos.type = 'button';
+    todos.className = 'opcao-lider-dashboard';
+    todos.setAttribute('role', 'option');
+    todos.setAttribute('aria-selected', String(!campo.value));
+    todos.textContent = 'Todos os líderes';
+    todos.addEventListener('click', function () {
+      campo.value = '';
+      fecharOpcoesLiderDashboard();
+      aplicarFiltrosDashboard();
+    });
+    lista.appendChild(todos);
+    valoresUnicosDashboard('lider').filter(function (lider) {
+      return !busca || normalizarBuscaDashboard(lider).includes(busca);
+    }).forEach(function (lider) {
+      const opcao = document.createElement('button');
+      opcao.type = 'button';
+      opcao.className = 'opcao-lider-dashboard';
+      opcao.setAttribute('role', 'option');
+      opcao.setAttribute('aria-selected', String(campo.value === lider));
+      opcao.textContent = lider;
+      opcao.addEventListener('click', function () {
+        campo.value = lider;
+        fecharOpcoesLiderDashboard();
+        aplicarFiltrosDashboard();
+      });
+      lista.appendChild(opcao);
+    });
+  }
+
+  function abrirOpcoesLiderDashboard() {
+    montarOpcoesLiderDashboard();
+    document.getElementById('opcoes-lider-dashboard').hidden = false;
+    document.getElementById('filtro-lider').setAttribute('aria-expanded', 'true');
+  }
+
+  function fecharOpcoesLiderDashboard() {
+    document.getElementById('opcoes-lider-dashboard').hidden = true;
+    document.getElementById('filtro-lider').setAttribute('aria-expanded', 'false');
+  }
+
+  function atualizarRotuloPortfoliosDashboard() {
+    document.getElementById('abrir-portfolios-dashboard').textContent =
+      estadoDashboard.portfolios.length
+        ? estadoDashboard.portfolios.length + ' portfólio(s) selecionado(s) ▾'
+        : 'Todos os portfólios ▾';
   }
 
   function montarMenuPortfoliosDashboard() {
-    const menu = document.getElementById('menu-portfolios-dashboard');
+    const menu = document.getElementById('opcoes-portfolios-dashboard');
     menu.replaceChildren();
-    [''].concat(valoresUnicosDashboard('portfolio')).forEach(function (portfolio) {
-      const botao = document.createElement('button');
-      botao.type = 'button';
-      botao.className = 'botao-portfolio-dashboard' + (estadoDashboard.portfolio === portfolio ? ' ativo' : '');
-      botao.textContent = portfolio || 'TODOS OS PORTFÓLIOS';
-      botao.addEventListener('click', function () {
-        estadoDashboard.portfolio = portfolio;
-        document.getElementById('filtro-portfolio').value = portfolio;
-        montarMenuPortfoliosDashboard();
-        aplicarFiltrosDashboard();
+    const busca = normalizarBuscaDashboard(
+      document.getElementById('pesquisar-portfolio-dashboard').value
+    );
+    valoresUnicosDashboard('portfolio')
+      .filter(function (portfolio) {
+        return normalizarBuscaDashboard(portfolio).includes(busca);
+      })
+      .forEach(function (portfolio) {
+        const label = document.createElement('label');
+        const input = document.createElement('input');
+        input.type = 'checkbox';
+        input.checked = estadoDashboard.portfolios.includes(portfolio);
+        input.addEventListener('change', function () {
+          estadoDashboard.portfolios = input.checked
+            ? estadoDashboard.portfolios.concat(portfolio)
+            : estadoDashboard.portfolios.filter(function (item) { return item !== portfolio; });
+          atualizarRotuloPortfoliosDashboard();
+          aplicarFiltrosDashboard();
+        });
+        const texto = document.createElement('span');
+        texto.textContent = portfolio;
+        label.append(input, texto);
+        menu.appendChild(label);
       });
-      menu.appendChild(botao);
-    });
   }
 
   function normalizarBuscaDashboard(valor) {
-    return String(valor || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+    return String(valor || '').normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
   }
 
   function aplicarFiltrosDashboard() {
-    const contagiro = document.getElementById('filtro-contagiro').value;
-    const inicioDe = document.getElementById('filtro-inicio-de').value;
-    const inicioAte = document.getElementById('filtro-inicio-ate').value;
-    const prazoDe = document.getElementById('filtro-prazo-de').value;
-    const prazoAte = document.getElementById('filtro-prazo-ate').value;
-    const status = document.getElementById('filtro-status').value;
-    const area = document.getElementById('filtro-area').value;
-    const busca = normalizarBuscaDashboard(document.getElementById('filtro-mapro').value);
-    const portfolio = document.getElementById('filtro-portfolio').value;
-    estadoDashboard.portfolio = portfolio;
+    const visaoGeral = estadoDashboard.aba === 'mapros';
+    const contagiro = visaoGeral ? document.getElementById('filtro-contagiro').value : '';
+    const inicioDe = visaoGeral ? document.getElementById('filtro-inicio-de').value : '';
+    const inicioAte = visaoGeral ? document.getElementById('filtro-inicio-ate').value : '';
+    const prazoDe = visaoGeral ? document.getElementById('filtro-prazo-de').value : '';
+    const prazoAte = visaoGeral ? document.getElementById('filtro-prazo-ate').value : '';
+    const status = visaoGeral ? document.getElementById('filtro-status').value : '';
+    const area = visaoGeral ? document.getElementById('filtro-area').value : '';
+    const nivel = visaoGeral ? document.getElementById('filtro-nivel').value : '';
+    const lider = visaoGeral
+      ? normalizarBuscaDashboard(document.getElementById('filtro-lider').value) : '';
+    const busca = visaoGeral
+      ? normalizarBuscaDashboard(document.getElementById('filtro-mapro').value) : '';
     estadoDashboard.filtrados = estadoDashboard.projetos.filter(function (projeto) {
       return (!contagiro || projeto.contagiro === contagiro) &&
-        (!inicioDe || projeto.dataInicio >= inicioDe) && (!inicioAte || projeto.dataInicio <= inicioAte) &&
-        (!prazoDe || projeto.prazo >= prazoDe) && (!prazoAte || projeto.prazo <= prazoAte) &&
-        (!status || projeto.status === status) && (!area || projeto.area === area) &&
-        (!portfolio || projeto.portfolio === portfolio) &&
-        (!busca || normalizarBuscaDashboard(projeto.id + ' ' + projeto.nome).indexOf(busca) !== -1);
+        (!inicioDe || projeto.dataInicio >= inicioDe) &&
+        (!inicioAte || projeto.dataInicio <= inicioAte) &&
+        (!prazoDe || projeto.prazo >= prazoDe) &&
+        (!prazoAte || projeto.prazo <= prazoAte) &&
+        (!status || projeto.status === status) &&
+        (!area || projeto.area === area) &&
+        (!nivel || projeto.nivel === nivel) &&
+        (!lider || normalizarBuscaDashboard(projeto.lider).includes(lider)) &&
+        (!estadoDashboard.portfolios.length ||
+          estadoDashboard.portfolios.includes(projeto.portfolio)) &&
+        (!busca || normalizarBuscaDashboard(projeto.id + ' ' + projeto.nome).includes(busca));
     });
+    estadoDashboard.paginaMapros = 1;
+    estadoDashboard.paginaAtividades = 1;
     renderizarDashboard();
   }
 
+  function alternarAbaDashboard(aba) {
+    estadoDashboard.aba = aba === 'atividades' ? 'atividades' : 'mapros';
+    document.querySelectorAll('[data-aba-dashboard]').forEach(function (botao) {
+      const ativa = botao.dataset.abaDashboard === estadoDashboard.aba;
+      botao.classList.toggle('ativa', ativa);
+      botao.setAttribute('aria-selected', String(ativa));
+      botao.tabIndex = ativa ? 0 : -1;
+    });
+    document.getElementById('aba-mapros-dashboard').hidden = estadoDashboard.aba !== 'mapros';
+    document.getElementById('aba-atividades-dashboard').hidden =
+      estadoDashboard.aba !== 'atividades';
+    const botaoFiltros = document.getElementById('abrir-filtros-dashboard');
+    const seletorPortfolio = document.querySelector('.seletor-portfolio-dashboard');
+    const emAtividades = estadoDashboard.aba === 'atividades';
+    document.querySelector('.barra-abas-dashboard').classList.toggle('modo-atividades', emAtividades);
+    botaoFiltros.hidden = emAtividades;
+    seletorPortfolio.hidden = false;
+    if (estadoDashboard.aba === 'atividades') {
+      document.getElementById('painel-filtros-dashboard').hidden = true;
+      botaoFiltros.setAttribute('aria-expanded', 'false');
+    }
+  }
+
   function renderizarDashboard() {
+    alternarAbaDashboard(estadoDashboard.aba);
     renderizarIndicadoresDashboard();
     renderizarDetalhesIndicadorDashboard();
-    renderizarTagsDashboard();
     renderizarRoscaDashboard();
-    renderizarBarrasDashboard('grafico-status', contarPorDashboard('status'), ['#06063d', '#ef625d', '#42d779', '#ff9f43', '#8b8c9b']);
-    renderizarBarrasDashboard('grafico-portfolios', contarPorDashboard('portfolio'), ['#06063d', '#ec0e37', '#16c7d8', '#42d779', '#ff9f43']);
-    renderizarAtrasosDashboard();
+    renderizarBarrasDashboard(
+      'grafico-portfolios',
+      contarPorDashboard('portfolio'),
+      ['#287fc2', '#16c7d8', '#8b5cf6', '#42d779', '#ff9f43']
+    );
+    renderizarIndicadoresAtividadesDashboard();
+    renderizarMinhasAtividadesDashboard();
+    atualizarResumoFiltrosDashboard();
   }
 
   function diasEntreDashboard(inicio, fim) {
@@ -123,101 +275,355 @@
     return Math.max(0, Math.round((b - a) / 86400000));
   }
 
-  function obterProjetosIndicadorDashboard(chave) {
-    const projetos = estadoDashboard.filtrados;
-    if (chave === 'concluidas') {
+  function filtrarProjetosPorIndicadorDashboard(projetos, chave) {
+    if (chave === 'emAndamento') {
+      return projetos.filter(function (projeto) { return projeto.status === 'EM ANDAMENTO'; });
+    }
+    if (chave === 'concluidas' || chave === 'tempoMedio') {
       return projetos.filter(function (projeto) { return projeto.status === 'CONCLUÍDA'; });
+    }
+    if (chave === 'naoAplicaveis') {
+      return projetos.filter(function (projeto) { return projeto.status === 'NÃO APLICÁVEL'; });
     }
     if (chave === 'naoIniciadas') {
       return projetos.filter(function (projeto) {
-        return projeto.acompanhamentoIniciado !== true;
+        return projeto.status === 'AGUARDANDO INÍCIO';
       });
     }
     if (chave === 'canceladas') {
-      return projetos.filter(function (projeto) {
-        return projeto.canceladaPorInatividade === true;
-      });
+      return projetos.filter(function (projeto) { return projeto.status === 'CANCELADA'; });
+    }
+    if (chave === 'replanejadas') {
+      return projetos.filter(function (projeto) { return projeto.replanejada === true; });
+    }
+    if (chave === 'novasAtividades') {
+      return projetos.filter(function (projeto) { return projeto.temNovasAtividades === true; });
     }
     return projetos.slice();
   }
 
+  function projetoNaFaixaConclusaoDashboard(projeto, faixa) {
+    const percentual = Number(projeto.percentual) || 0;
+    if (faixa === 'menos50') return percentual < 50;
+    if (faixa === '50a70') return percentual >= 50 && percentual < 70;
+    if (faixa === '70a90') return percentual >= 70 && percentual < 90;
+    if (faixa === '90mais') return percentual >= 90;
+    return true;
+  }
+
+  function obterProjetosCruzadosDashboard(opcoes) {
+    const config = opcoes || {};
+    let projetos = estadoDashboard.filtrados.slice();
+    if (!config.ignorarIndicador && estadoDashboard.indicadorDetalhe) {
+      projetos = filtrarProjetosPorIndicadorDashboard(
+        projetos, estadoDashboard.indicadorDetalhe
+      );
+    }
+    if (!config.ignorarFaixa && estadoDashboard.filtroFaixaConclusao) {
+      projetos = projetos.filter(function (projeto) {
+        return projetoNaFaixaConclusaoDashboard(
+          projeto, estadoDashboard.filtroFaixaConclusao
+        );
+      });
+    }
+    if (!config.ignorarPortfolio && estadoDashboard.filtroGraficoPortfolio) {
+      projetos = projetos.filter(function (projeto) {
+        return projeto.portfolio === estadoDashboard.filtroGraficoPortfolio;
+      });
+    }
+    return projetos;
+  }
+
+  function obterProjetosIndicadorDashboard(chave) {
+    return filtrarProjetosPorIndicadorDashboard(
+      obterProjetosCruzadosDashboard({ignorarIndicador: true}), chave
+    );
+  }
+
+  function porcentagemIndicadorDashboard(valor, total) {
+    return total ? Math.round(valor / total * 100) + '%' : '0%';
+  }
+
+  function criarCardProjetoDashboard(item, classe) {
+    const card = document.createElement('button');
+    const ativo = item.chave === 'todas'
+      ? !estadoDashboard.indicadorDetalhe
+      : estadoDashboard.indicadorDetalhe === item.chave;
+    card.type = 'button';
+    card.className = 'indicador-dashboard indicador-dashboard-clicavel ' +
+      (classe || '') + (ativo ? ' ativo' : '');
+    card.style.setProperty('--cor-indicador', item.cor);
+    card.setAttribute('aria-pressed', String(ativo));
+    card.setAttribute('aria-controls', 'detalhes-indicador-dashboard');
+    card.title = ativo ? 'Clique para retirar o filtro' : 'Clique para filtrar tabela e gráficos';
+    card.addEventListener('click', function () {
+      estadoDashboard.indicadorDetalhe = item.chave === 'todas' || ativo ? '' : item.chave;
+      estadoDashboard.paginaMapros = 1;
+      renderizarDashboard();
+    });
+    const rotulo = document.createElement('span');
+    rotulo.textContent = item.rotulo;
+    const metricas = document.createElement('div');
+    metricas.className = 'metricas-indicador-dashboard';
+    const valor = document.createElement('strong');
+    valor.textContent = item.valor;
+    metricas.appendChild(valor);
+    if (item.percentual) {
+      const percentual = document.createElement('small');
+      percentual.className = 'percentual-indicador-dashboard';
+      percentual.textContent = item.percentual;
+      metricas.appendChild(percentual);
+    }
+    card.append(rotulo, metricas);
+    if (item.apoio) {
+      const apoio = document.createElement('small');
+      apoio.className = 'apoio-indicador-dashboard';
+      apoio.textContent = item.apoio;
+      card.appendChild(apoio);
+    }
+    return card;
+  }
+
   function renderizarIndicadoresDashboard() {
-    const projetos = estadoDashboard.filtrados;
-    const concluidas = obterProjetosIndicadorDashboard('concluidas');
+    const projetos = obterProjetosCruzadosDashboard({ignorarIndicador: true});
+    const total = projetos.length;
+    const emAndamento = obterProjetosIndicadorDashboard('emAndamento');
     const naoIniciadas = obterProjetosIndicadorDashboard('naoIniciadas');
-    const canceladasPorInatividade = obterProjetosIndicadorDashboard('canceladas');
-    const duracoes = concluidas.map(function (p) {
-      return diasEntreDashboard(p.dataInicio, p.conclusaoEm);
-    }).filter(function (v) { return v !== null; });
-    const media = duracoes.length ? Math.round(duracoes.reduce(function (a, b) { return a + b; }, 0) / duracoes.length) : 0;
-    const itens = [
-      {chave: 'todas', rotulo: 'QUANTIDADE DE MAPROS', valor: projetos.length,
-        apoio: 'Projetos no recorte atual', cor: '#06063d', clicavel: true},
-      {chave: 'concluidas', rotulo: 'MAPROS CONCLUÍDAS', valor: concluidas.length,
-        apoio: 'Conclusão integral', cor: '#287fc2', clicavel: true},
-      {chave: 'naoIniciadas', rotulo: 'MAPROS NÃO INICIADAS', valor: naoIniciadas.length,
-        apoio: 'Acompanhamento não iniciado', cor: '#ff9f43', clicavel: true},
-      {chave: 'canceladas', rotulo: 'MAPROS CANCELADAS', valor: canceladasPorInatividade.length,
-        apoio: 'Canceladas por inatividade', cor: '#77798b', clicavel: true},
-      {chave: '', rotulo: 'TEMPO MÉDIO DE CONCLUSÃO', valor: media + ' dias',
-        apoio: duracoes.length + ' projeto(s) concluído(s)', cor: '#ec0e37', clicavel: false}
-    ];
+    const concluidas = obterProjetosIndicadorDashboard('concluidas');
+    const naoAplicaveis = obterProjetosIndicadorDashboard('naoAplicaveis');
+    const replanejadas = obterProjetosIndicadorDashboard('replanejadas');
+    const novas = obterProjetosIndicadorDashboard('novasAtividades');
+    const canceladas = obterProjetosIndicadorDashboard('canceladas');
+    const duracoes = concluidas.map(function (projeto) {
+      return diasEntreDashboard(projeto.dataInicio, projeto.conclusaoEm);
+    }).filter(function (valor) { return valor !== null; });
+    const media = duracoes.length
+      ? Math.round(duracoes.reduce(function (a, b) { return a + b; }, 0) / duracoes.length)
+      : 0;
+    const meses = media / 30.44;
+    const mesesFormatados = meses.toLocaleString('pt-BR', {
+      minimumFractionDigits: 1,
+      maximumFractionDigits: 1
+    }) + (Math.abs(meses - 1) < 0.05 ? ' mês' : ' meses');
     const grade = document.getElementById('indicadores-dashboard');
     grade.replaceChildren();
-    itens.forEach(function (item) {
-      const card = document.createElement(item.clicavel ? 'button' : 'article');
-      const ativo = item.chave && estadoDashboard.indicadorDetalhe === item.chave;
-      card.className = 'indicador-dashboard' +
-        (item.clicavel ? ' indicador-dashboard-clicavel' : '') +
-        (ativo ? ' ativo' : '');
-      card.style.setProperty('--cor-indicador', item.cor);
-      if (item.clicavel) {
-        card.type = 'button';
-        card.setAttribute('aria-expanded', String(ativo));
-        card.setAttribute('aria-controls', 'detalhes-indicador-dashboard');
-        card.title = ativo ? 'Clique para fechar a lista' : 'Clique para listar as Mapros';
-        card.addEventListener('click', function () {
-          estadoDashboard.indicadorDetalhe = ativo ? '' : item.chave;
-          renderizarIndicadoresDashboard();
-          renderizarDetalhesIndicadorDashboard();
-        });
-      }
-      const rotulo = document.createElement('span'); rotulo.textContent = item.rotulo;
-      const valor = document.createElement('strong'); valor.textContent = item.valor;
-      const apoio = document.createElement('small'); apoio.textContent = item.apoio;
-      card.append(rotulo, valor, apoio); grade.appendChild(card);
+
+    grade.appendChild(criarCardProjetoDashboard({
+      chave: 'todas',
+      rotulo: 'QUANTIDADE DE MAPROS',
+      valor: total,
+      percentual: '100%',
+      apoio: 'Projetos no recorte atual',
+      cor: '#06063d'
+    }, 'indicador-total-dashboard'));
+
+    const grupoStatus = document.createElement('div');
+    grupoStatus.className = 'grupo-status-indicadores-dashboard';
+    [
+      {chave: 'emAndamento', rotulo: 'EM ANDAMENTO', valor: emAndamento.length,
+        percentual: porcentagemIndicadorDashboard(emAndamento.length, total), cor: '#16c7d8'},
+      {chave: 'naoIniciadas', rotulo: 'NÃO INICIADAS', valor: naoIniciadas.length,
+        percentual: porcentagemIndicadorDashboard(naoIniciadas.length, total), cor: '#ff9f43'},
+      {chave: 'concluidas', rotulo: 'CONCLUÍDAS', valor: concluidas.length,
+        percentual: porcentagemIndicadorDashboard(concluidas.length, total), cor: '#287fc2'},
+      {chave: 'naoAplicaveis', rotulo: 'NÃO APLICÁVEIS', valor: naoAplicaveis.length,
+        percentual: porcentagemIndicadorDashboard(naoAplicaveis.length, total), cor: '#77798b'}
+    ].forEach(function (item) {
+      grupoStatus.appendChild(criarCardProjetoDashboard(item, 'indicador-status-dashboard'));
     });
+    grade.appendChild(grupoStatus);
+
+    const grupoAcompanhamento = document.createElement('div');
+    grupoAcompanhamento.className = 'grupo-acompanhamento-indicadores-dashboard';
+    grupoAcompanhamento.append(
+      criarCardProjetoDashboard({
+        chave: 'replanejadas', rotulo: 'MAPROS REPLANEJADAS',
+        valor: replanejadas.length,
+        percentual: porcentagemIndicadorDashboard(replanejadas.length, total),
+        cor: '#8b5cf6'
+      }, 'indicador-compacto-dashboard'),
+      criarCardProjetoDashboard({
+        chave: 'novasAtividades', rotulo: 'MAPROS COM NOVAS ATIVIDADES',
+        valor: novas.length,
+        percentual: porcentagemIndicadorDashboard(novas.length, total),
+        cor: '#0aaec0'
+      }, 'indicador-compacto-dashboard')
+    );
+    grade.appendChild(grupoAcompanhamento);
+
+    const grupoRodape = document.createElement('div');
+    grupoRodape.className = 'grupo-rodape-indicadores-dashboard';
+    grupoRodape.appendChild(criarCardProjetoDashboard({
+      chave: 'tempoMedio',
+      rotulo: 'TEMPO MÉDIO DE CONCLUSÃO',
+      valor: media + ' dias',
+      percentual: mesesFormatados,
+      apoio: 'Baseado em ' + duracoes.length + ' Mapro(s) concluída(s)',
+      cor: '#ec0e37'
+    }, 'indicador-tempo-dashboard'));
+    if (estadoDashboard.dados && estadoDashboard.dados.admin) {
+      grupoRodape.appendChild(criarCardProjetoDashboard({
+        chave: 'canceladas',
+        rotulo: 'MAPROS CANCELADAS',
+        valor: canceladas.length,
+        percentual: porcentagemIndicadorDashboard(canceladas.length, total),
+        cor: '#77798b'
+      }, 'indicador-canceladas-dashboard'));
+    } else {
+      const vazio = document.createElement('div');
+      vazio.className = 'espaco-indicador-dashboard';
+      vazio.setAttribute('aria-hidden', 'true');
+      grupoRodape.appendChild(vazio);
+    }
+    grade.appendChild(grupoRodape);
   }
 
   function tituloIndicadorDashboard(chave) {
     const titulos = {
       todas: 'TODAS AS MAPROS',
+      emAndamento: 'MAPROS EM ANDAMENTO',
       concluidas: 'MAPROS CONCLUÍDAS',
-      naoIniciadas: 'MAPROS SEM ACOMPANHAMENTO INICIADO',
-      canceladas: 'MAPROS CANCELADAS POR INATIVIDADE'
+      naoAplicaveis: 'MAPROS NÃO APLICÁVEIS',
+      naoIniciadas: 'MAPROS NÃO INICIADAS',
+      replanejadas: 'MAPROS REPLANEJADAS',
+      canceladas: 'MAPROS CANCELADAS',
+      novasAtividades: 'MAPROS COM NOVAS ATIVIDADES',
+      tempoMedio: 'MAPROS CONCLUÍDAS'
     };
-    return titulos[chave] || '';
+    return titulos[chave] || 'TODAS AS MAPROS';
   }
 
   function formatarDataHoraDashboard(valor) {
     if (!valor) return '—';
     const data = new Date(valor);
-    if (Number.isNaN(data.getTime())) return formatarDataDashboard(String(valor).slice(0, 10));
+    if (Number.isNaN(data.getTime())) {
+      return formatarDataDashboard(String(valor).slice(0, 10));
+    }
     return new Intl.DateTimeFormat('pt-BR', {
-      timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', year: 'numeric',
-      hour: '2-digit', minute: '2-digit', hour12: false
+      timeZone: 'America/Sao_Paulo',
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
     }).format(data).replace(',', '');
   }
 
-  function renderizarDetalhesIndicadorDashboard() {
-    const secao = document.getElementById('detalhes-indicador-dashboard');
-    const chave = estadoDashboard.indicadorDetalhe;
-    secao.hidden = !chave;
-    if (!chave) return;
-
-    const projetos = obterProjetosIndicadorDashboard(chave).sort(function (a, b) {
-      return Number(a.id) - Number(b.id);
+  function compararValoresDashboard(a, b) {
+    const numeroA = Number(a);
+    const numeroB = Number(b);
+    if (String(a).trim() !== '' && String(b).trim() !== '' &&
+        Number.isFinite(numeroA) && Number.isFinite(numeroB)) return numeroA - numeroB;
+    return String(a || '').localeCompare(String(b || ''), 'pt-BR', {
+      numeric: true, sensitivity: 'base'
     });
+  }
+
+  function ordenarRegistrosDashboard(registros, colunas, ordenacao) {
+    const coluna = colunas.find(function (item) { return item.campo === ordenacao.campo; }) || colunas[0];
+    const direcao = ordenacao.direcao === 'desc' ? -1 : 1;
+    return registros.slice().sort(function (a, b) {
+      return compararValoresDashboard(coluna.valorOrdenacao
+        ? coluna.valorOrdenacao(a) : coluna.valor(a), coluna.valorOrdenacao
+        ? coluna.valorOrdenacao(b) : coluna.valor(b)) * direcao;
+    });
+  }
+
+  function criarCabecalhoTabelaDashboard(cabecalho, colunas, ordenacao, aoOrdenar) {
+    cabecalho.replaceChildren();
+    colunas.forEach(function (coluna) {
+      const th = document.createElement('th');
+      const botao = document.createElement('button');
+      botao.type = 'button';
+      botao.className = 'botao-ordenar-tabela-dashboard';
+      botao.textContent = coluna.rotulo;
+      if (ordenacao.campo === coluna.campo) botao.dataset.direcao = ordenacao.direcao;
+      botao.setAttribute('aria-label', 'Ordenar por ' + coluna.rotulo);
+      botao.addEventListener('click', function () {
+        aoOrdenar(coluna.campo);
+      });
+      th.appendChild(botao);
+      cabecalho.appendChild(th);
+    });
+  }
+
+  function paginarRegistrosDashboard(registros, pagina, tamanho) {
+    const totalPaginas = Math.max(1, Math.ceil(registros.length / tamanho));
+    const paginaValida = Math.min(Math.max(1, pagina), totalPaginas);
+    return {
+      pagina: paginaValida,
+      totalPaginas: totalPaginas,
+      registros: registros.slice((paginaValida - 1) * tamanho, paginaValida * tamanho)
+    };
+  }
+
+  function atualizarPaginacaoDashboard(prefixo, pagina, totalPaginas, totalRegistros) {
+    const nav = document.getElementById('paginacao-' + prefixo + '-dashboard');
+    nav.hidden = totalRegistros <= 0;
+    document.getElementById('pagina-' + prefixo + '-dashboard').textContent =
+      'Página ' + pagina + ' de ' + totalPaginas;
+    const anterior = nav.querySelector('[data-pagina-' + prefixo + '="anterior"]');
+    const proxima = nav.querySelector('[data-pagina-' + prefixo + '="proxima"]');
+    anterior.disabled = pagina <= 1;
+    proxima.disabled = pagina >= totalPaginas;
+  }
+
+  function abrirMaproPeloDashboard(idMapro) {
+    if (!estadoDashboard.dados || !estadoDashboard.dados.urlAplicacao) return;
+    const separador = estadoDashboard.dados.urlAplicacao.includes('?') ? '&' : '?';
+    MaproUI.navigate(estadoDashboard.dados.urlAplicacao + separador +
+      'pagina=mapros&mapro=' + encodeURIComponent(String(idMapro || '')),
+      'Abrindo Mapro...');
+  }
+
+  function tornarLinhaMaproInterativaDashboard(linha, idMapro, nome) {
+    linha.tabIndex = 0;
+    linha.setAttribute('role', 'link');
+    linha.setAttribute('aria-label', 'Abrir Mapro ' + idMapro + ': ' + String(nome || ''));
+    linha.title = 'Abrir esta Mapro';
+    linha.addEventListener('click', function () { abrirMaproPeloDashboard(idMapro); });
+    linha.addEventListener('keydown', function (evento) {
+      if (evento.key !== 'Enter' && evento.key !== ' ') return;
+      evento.preventDefault();
+      abrirMaproPeloDashboard(idMapro);
+    });
+  }
+
+  function renderizarDetalhesIndicadorDashboard() {
+    const chave = estadoDashboard.indicadorDetalhe;
+    const admin = Boolean(estadoDashboard.dados && estadoDashboard.dados.admin);
+    const colunas = [
+      {campo: 'id', rotulo: 'MAPRO', valor: function (p) { return p.id; }},
+      {campo: 'nome', rotulo: 'PROJETO', valor: function (p) { return p.nome; }},
+      {campo: 'portfolio', rotulo: 'PORTFÓLIO', valor: function (p) { return p.portfolio; }},
+      {campo: 'lider', rotulo: 'LÍDER', valor: function (p) { return p.lider; }},
+      {campo: 'contagiro', rotulo: 'CONTAGIRO', valor: function (p) { return p.contagiro; }},
+      {campo: 'acompanhamento', rotulo: 'ACOMPANHAMENTO INICIADO EM',
+        valor: function (p) { return formatarDataHoraDashboard(p.acompanhamentoIniciadoEm); },
+        valorOrdenacao: function (p) { return p.acompanhamentoIniciadoEm; }},
+      {campo: 'prazo', rotulo: 'PRAZO', valor: function (p) { return formatarDataDashboard(p.prazo); },
+        valorOrdenacao: function (p) { return p.prazo; }},
+      {campo: 'status', rotulo: 'STATUS', valor: function (p) { return p.status; }},
+      {campo: 'percentual', rotulo: 'CONCLUSÃO',
+        valor: function (p) { return Math.round(Number(p.percentual) || 0) + '%'; },
+        valorOrdenacao: function (p) { return Number(p.percentual) || 0; }}
+    ];
+    if (admin) colunas.push({campo: 'motivoCancelamento', rotulo: 'MOTIVO DO CANCELAMENTO',
+      valor: function (p) { return p.motivoCancelamento; }});
+    const busca = normalizarBuscaDashboard(estadoDashboard.buscaTabelaMapros);
+    let projetos = obterProjetosCruzadosDashboard().filter(function (projeto) {
+      if (!busca) return true;
+      return normalizarBuscaDashboard(colunas.map(function (coluna) {
+        return coluna.valor(projeto);
+      }).join(' ')).includes(busca);
+    });
+    projetos = ordenarRegistrosDashboard(projetos, colunas, estadoDashboard.ordenacaoMapros);
+    const paginacao = paginarRegistrosDashboard(
+      projetos, estadoDashboard.paginaMapros, estadoDashboard.tamanhoPaginaMapros
+    );
+    estadoDashboard.paginaMapros = paginacao.pagina;
+    document.getElementById('fechar-detalhes-indicador-dashboard').hidden = !chave;
     document.getElementById('titulo-detalhes-indicador-dashboard').textContent =
       tituloIndicadorDashboard(chave) + ' · ' + projetos.length;
     const estado = document.getElementById('estado-detalhes-indicador-dashboard');
@@ -227,46 +633,248 @@
     estado.hidden = Boolean(projetos.length);
     container.hidden = !projetos.length;
     estado.textContent = 'Nenhuma Mapro encontrada para este indicador e os filtros selecionados.';
-    projetos.forEach(function (projeto) {
+    const cabecalho = container.querySelector('thead tr');
+    criarCabecalhoTabelaDashboard(cabecalho, colunas, estadoDashboard.ordenacaoMapros,
+      function (campo) {
+        estadoDashboard.ordenacaoMapros.direcao =
+          estadoDashboard.ordenacaoMapros.campo === campo &&
+          estadoDashboard.ordenacaoMapros.direcao === 'asc' ? 'desc' : 'asc';
+        estadoDashboard.ordenacaoMapros.campo = campo;
+        estadoDashboard.paginaMapros = 1;
+        renderizarDetalhesIndicadorDashboard();
+      });
+    paginacao.registros.forEach(function (projeto) {
       const linha = document.createElement('tr');
-      [
-        projeto.id,
-        projeto.nome,
-        projeto.portfolio,
-        projeto.lider,
-        projeto.contagiro,
-        formatarDataHoraDashboard(projeto.acompanhamentoIniciadoEm),
-        formatarDataDashboard(projeto.prazo),
-        projeto.status,
-        Math.round(Number(projeto.percentual) || 0) + '%',
-        projeto.motivoCancelamento
-      ].forEach(function (valor) {
+      tornarLinhaMaproInterativaDashboard(linha, projeto.id, projeto.nome);
+      colunas.forEach(function (coluna) {
+        const valor = coluna.valor(projeto);
         const celula = document.createElement('td');
+        celula.dataset.coluna = coluna.campo;
+        if (coluna.campo === 'status') {
+          celula.dataset.status = normalizarBuscaDashboard(valor).replace(/\s+/g, '-');
+        }
         celula.textContent = valor === 0 ? '0' : String(valor || '—');
         linha.appendChild(celula);
       });
       corpo.appendChild(linha);
     });
+    const inicio = projetos.length ? (paginacao.pagina - 1) * estadoDashboard.tamanhoPaginaMapros + 1 : 0;
+    const fim = Math.min(paginacao.pagina * estadoDashboard.tamanhoPaginaMapros, projetos.length);
+    document.getElementById('resumo-tabela-mapros-dashboard').textContent =
+      inicio + '–' + fim + ' de ' + projetos.length;
+    atualizarPaginacaoDashboard('mapros', paginacao.pagina,
+      paginacao.totalPaginas, projetos.length);
+  }
+
+  function obterMinhasAtividadesDashboard() {
+    const atividades = [];
+    estadoDashboard.filtrados.forEach(function (projeto) {
+      (projeto.minhasAtividades || []).forEach(function (atividade) {
+        atividades.push(Object.assign({
+          idMapro: projeto.id,
+          projeto: projeto.nome,
+          portfolio: projeto.portfolio
+        }, atividade));
+      });
+    });
+    return atividades;
+  }
+
+  function filtrarMinhasAtividadesDashboard(chave) {
+    const atividades = obterMinhasAtividadesDashboard();
+    if (chave === 'atrasadas') {
+      return atividades.filter(function (atividade) { return atividade.saude === 'VERMELHO'; });
+    }
+    if (chave === 'aVencer') {
+      return atividades.filter(function (atividade) { return atividade.saude === 'AMARELO'; });
+    }
+    if (chave === 'noPrazo') {
+      return atividades.filter(function (atividade) { return atividade.saude === 'VERDE'; });
+    }
+    if (chave === 'concluidas') {
+      return atividades.filter(function (atividade) { return atividade.status === 'CONCLUIDA'; });
+    }
+    if (chave === 'naoAplicaveis') {
+      return atividades.filter(function (atividade) { return atividade.status === 'NAO_APLICAVEL'; });
+    }
+    return atividades;
+  }
+
+  function tituloAtividadesDashboard(chave) {
+    const titulos = {
+      todas: 'TODAS AS MINHAS ATIVIDADES',
+      atrasadas: 'MINHAS ATIVIDADES EM ATRASO',
+      aVencer: 'MINHAS ATIVIDADES A VENCER',
+      noPrazo: 'MINHAS ATIVIDADES NO PRAZO',
+      concluidas: 'MINHAS ATIVIDADES CONCLUÍDAS',
+      naoAplicaveis: 'MINHAS ATIVIDADES NÃO APLICÁVEIS'
+    };
+    return titulos[chave] || 'TODAS AS MINHAS ATIVIDADES';
+  }
+
+  function renderizarIndicadoresAtividadesDashboard() {
+    const total = obterMinhasAtividadesDashboard().length;
+    const itens = [
+      {chave: 'todas', rotulo: 'MINHAS ATIVIDADES - TOTAL', cor: '#06063d'},
+      {chave: 'atrasadas', rotulo: 'MINHAS ATIVIDADES EM ATRASO', cor: '#ec0e37'},
+      {chave: 'aVencer', rotulo: 'MINHAS ATIVIDADES A VENCER', cor: '#f0a400'},
+      {chave: 'noPrazo', rotulo: 'MINHAS ATIVIDADES NO PRAZO', cor: '#149447'},
+      {chave: 'concluidas', rotulo: 'MINHAS ATIVIDADES CONCLUÍDAS', cor: '#287fc2'},
+      {chave: 'naoAplicaveis', rotulo: 'MINHAS ATIVIDADES NÃO APLICÁVEIS', cor: '#77798b'}
+    ];
+    const grade = document.getElementById('indicadores-atividades-dashboard');
+    grade.replaceChildren();
+    itens.forEach(function (item) {
+      const quantidade = item.chave === 'todas'
+        ? total
+        : filtrarMinhasAtividadesDashboard(item.chave).length;
+      const ativo = item.chave === 'todas'
+        ? !estadoDashboard.indicadorAtividades
+        : estadoDashboard.indicadorAtividades === item.chave;
+      const card = document.createElement('button');
+      card.type = 'button';
+      card.className = 'card-minha-atividade-dashboard' + (ativo ? ' ativo' : '');
+      card.style.setProperty('--cor-indicador', item.cor);
+      card.setAttribute('aria-pressed', String(ativo));
+      card.setAttribute('aria-controls', 'tabela-minhas-atividades-container');
+      card.title = ativo ? 'Clique para retirar o filtro' : 'Clique para filtrar a tabela';
+      const rotulo = document.createElement('span');
+      rotulo.textContent = item.rotulo;
+      rotulo.title = item.rotulo;
+      const valor = document.createElement('strong');
+      valor.textContent = quantidade;
+      card.append(rotulo, valor);
+      card.addEventListener('click', function () {
+        estadoDashboard.indicadorAtividades = item.chave === 'todas' || ativo
+          ? '' : item.chave;
+        estadoDashboard.paginaAtividades = 1;
+        renderizarIndicadoresAtividadesDashboard();
+        renderizarMinhasAtividadesDashboard();
+        atualizarResumoFiltrosDashboard();
+      });
+      grade.appendChild(card);
+    });
+  }
+
+  function formatarSituacaoAtividadeDashboard(status) {
+    const mapa = {
+      PLANEJADA: 'Não iniciada',
+      EM_ANDAMENTO: 'Em andamento',
+      CONCLUIDA: 'Concluída',
+      NAO_APLICAVEL: 'Não aplicável'
+    };
+    return mapa[String(status || '').toUpperCase()] || String(status || '—');
+  }
+
+  function formatarSaudeAtividadeDashboard(saude) {
+    const mapa = {
+      VERMELHO: 'Em atraso',
+      AMARELO: 'A vencer',
+      VERDE: 'No prazo',
+      AZUL: 'Concluída',
+      CINZA: 'Não aplicável'
+    };
+    return mapa[String(saude || '').toUpperCase()] || '—';
+  }
+
+  function renderizarMinhasAtividadesDashboard() {
+    const chave = estadoDashboard.indicadorAtividades;
+    const colunas = [
+      {campo: 'idMapro', rotulo: 'MAPRO', valor: function (a) { return a.idMapro; }},
+      {campo: 'projeto', rotulo: 'PROJETO', valor: function (a) { return a.projeto; }},
+      {campo: 'portfolio', rotulo: 'PORTFÓLIO', valor: function (a) { return a.portfolio; }},
+      {campo: 'descricao', rotulo: 'ATIVIDADE', valor: function (a) { return a.descricao; }},
+      {campo: 'responsavel', rotulo: 'RESPONSÁVEL', valor: function (a) { return a.responsavel; }},
+      {campo: 'prazo', rotulo: 'PRAZO', valor: function (a) { return formatarDataDashboard(a.prazo); },
+        valorOrdenacao: function (a) { return a.prazo; }},
+      {campo: 'status', rotulo: 'SITUAÇÃO',
+        valor: function (a) { return formatarSituacaoAtividadeDashboard(a.status); }},
+      {campo: 'saude', rotulo: 'STATUS DO PRAZO',
+        valor: function (a) { return formatarSaudeAtividadeDashboard(a.saude); }}
+    ];
+    const busca = normalizarBuscaDashboard(estadoDashboard.buscaTabelaAtividades);
+    let atividades = filtrarMinhasAtividadesDashboard(chave).filter(function (atividade) {
+      if (!busca) return true;
+      return normalizarBuscaDashboard(colunas.map(function (coluna) {
+        return coluna.valor(atividade);
+      }).join(' ')).includes(busca);
+    });
+    atividades = ordenarRegistrosDashboard(
+      atividades, colunas, estadoDashboard.ordenacaoAtividades
+    );
+    const paginacao = paginarRegistrosDashboard(
+      atividades, estadoDashboard.paginaAtividades, estadoDashboard.tamanhoPaginaAtividades
+    );
+    estadoDashboard.paginaAtividades = paginacao.pagina;
+    document.getElementById('titulo-minhas-atividades-dashboard').textContent =
+      tituloAtividadesDashboard(chave) + ' · ' + atividades.length;
+    document.getElementById('limpar-filtro-atividades-dashboard').hidden = !chave;
+    const estado = document.getElementById('estado-minhas-atividades-dashboard');
+    const container = document.getElementById('tabela-minhas-atividades-container');
+    const corpo = document.getElementById('corpo-minhas-atividades-dashboard');
+    corpo.replaceChildren();
+    estado.hidden = Boolean(atividades.length);
+    container.hidden = !atividades.length;
+    estado.textContent = 'Nenhuma atividade encontrada para este indicador e os filtros selecionados.';
+    const cabecalho = container.querySelector('thead tr');
+    criarCabecalhoTabelaDashboard(cabecalho, colunas, estadoDashboard.ordenacaoAtividades,
+      function (campo) {
+        estadoDashboard.ordenacaoAtividades.direcao =
+          estadoDashboard.ordenacaoAtividades.campo === campo &&
+          estadoDashboard.ordenacaoAtividades.direcao === 'asc' ? 'desc' : 'asc';
+        estadoDashboard.ordenacaoAtividades.campo = campo;
+        estadoDashboard.paginaAtividades = 1;
+        renderizarMinhasAtividadesDashboard();
+      });
+    paginacao.registros.forEach(function (atividade) {
+      const linha = document.createElement('tr');
+      tornarLinhaMaproInterativaDashboard(linha, atividade.idMapro, atividade.projeto);
+      colunas.forEach(function (coluna) {
+        const valor = coluna.valor(atividade);
+        const celula = document.createElement('td');
+        celula.dataset.coluna = coluna.campo;
+        if (coluna.campo === 'status' || coluna.campo === 'saude') {
+          celula.dataset.status = normalizarBuscaDashboard(valor).replace(/\s+/g, '-');
+        }
+        celula.textContent = String(valor || '—');
+        linha.appendChild(celula);
+      });
+      corpo.appendChild(linha);
+    });
+    const inicio = atividades.length
+      ? (paginacao.pagina - 1) * estadoDashboard.tamanhoPaginaAtividades + 1 : 0;
+    const fim = Math.min(
+      paginacao.pagina * estadoDashboard.tamanhoPaginaAtividades, atividades.length
+    );
+    document.getElementById('resumo-tabela-atividades-dashboard').textContent =
+      inicio + '–' + fim + ' de ' + atividades.length;
+    atualizarPaginacaoDashboard('atividades', paginacao.pagina,
+      paginacao.totalPaginas, atividades.length);
   }
 
   function faixasDashboard() {
-    const projetos = estadoDashboard.filtrados;
+    const projetos = obterProjetosCruzadosDashboard({ignorarFaixa: true});
     return [
-      {rotulo: 'MENOS DE 50%', total: projetos.filter(function (p) { return p.percentual < 50; }).length, cor: '#ef625d'},
-      {rotulo: 'ENTRE 50% E 70%', total: projetos.filter(function (p) { return p.percentual >= 50 && p.percentual < 70; }).length, cor: '#42d779'},
-      {rotulo: 'ENTRE 70% E 90%', total: projetos.filter(function (p) { return p.percentual >= 70 && p.percentual < 90; }).length, cor: '#16c7d8'},
-      {rotulo: '90% OU MAIS', total: projetos.filter(function (p) { return p.percentual >= 90; }).length, cor: '#247ee5'}
+      {chave: 'menos50', rotulo: 'MENOS DE 50%', total: projetos.filter(function (p) {
+        return p.percentual < 50;
+      }).length, cor: '#ef625d'},
+      {chave: '50a70', rotulo: 'ENTRE 50% E 70%', total: projetos.filter(function (p) {
+        return p.percentual >= 50 && p.percentual < 70;
+      }).length, cor: '#42d779'},
+      {chave: '70a90', rotulo: 'ENTRE 70% E 90%', total: projetos.filter(function (p) {
+        return p.percentual >= 70 && p.percentual < 90;
+      }).length, cor: '#16c7d8'},
+      {chave: '90mais', rotulo: '90% OU MAIS', total: projetos.filter(function (p) {
+        return p.percentual >= 90;
+      }).length, cor: '#247ee5'}
     ];
   }
 
-  function renderizarTagsDashboard() {
-    const area = document.getElementById('tags-conclusao-dashboard'); area.replaceChildren();
-    faixasDashboard().forEach(function (faixa) {
-      const tag = document.createElement('article'); tag.className = 'tag-conclusao-dashboard'; tag.style.setProperty('--cor-tag', faixa.cor);
-      const texto = document.createElement('span'); texto.textContent = 'PROJETOS ' + faixa.rotulo;
-      const total = document.createElement('strong'); total.textContent = faixa.total;
-      tag.append(texto, total); area.appendChild(tag);
-    });
+  function alternarFaixaConclusaoDashboard(chave) {
+    estadoDashboard.filtroFaixaConclusao =
+      estadoDashboard.filtroFaixaConclusao === chave ? '' : chave;
+    estadoDashboard.paginaMapros = 1;
+    renderizarDashboard();
   }
 
   function renderizarRoscaDashboard() {
@@ -275,115 +883,417 @@
     contexto.clearRect(0, 0, canvas.width, canvas.height);
     const faixas = faixasDashboard();
     const total = faixas.reduce(function (soma, item) { return soma + item.total; }, 0);
-    const centroX = 130, centroY = 130, raio = 90, espessura = 43;
+    const centroX = canvas.width / 2;
+    const centroY = canvas.height / 2;
+    const menorLado = Math.min(canvas.width, canvas.height);
+    const raio = menorLado * .34;
+    const espessura = menorLado * .16;
+    estadoDashboard.segmentosRosca = [];
     if (!total) {
-      contexto.strokeStyle = '#eceef3'; contexto.lineWidth = espessura;
-      contexto.beginPath(); contexto.arc(centroX, centroY, raio, 0, Math.PI * 2); contexto.stroke();
-      contexto.fillStyle = '#77798b'; contexto.font = '700 13px Arial'; contexto.textAlign = 'center'; contexto.fillText('Sem dados', centroX, centroY + 4);
+      contexto.strokeStyle = '#eceef3';
+      contexto.lineWidth = espessura;
+      contexto.beginPath();
+      contexto.arc(centroX, centroY, raio, 0, Math.PI * 2);
+      contexto.stroke();
+      contexto.fillStyle = '#5f6071';
+      contexto.font = '700 13px Arial';
+      contexto.textAlign = 'center';
+      contexto.fillText('Sem dados', centroX, centroY + 4);
     } else {
       let inicio = -Math.PI / 2;
       faixas.forEach(function (faixa) {
         if (!faixa.total) return;
         const arco = (faixa.total / total) * Math.PI * 2;
-        contexto.strokeStyle = faixa.cor; contexto.lineWidth = espessura; contexto.lineCap = 'round';
-        contexto.beginPath(); contexto.arc(centroX, centroY, raio, inicio + .025, inicio + arco - .025); contexto.stroke();
+        estadoDashboard.segmentosRosca.push({
+          chave: faixa.chave, inicio: inicio, fim: inicio + arco,
+          centroX: centroX, centroY: centroY, raio: raio, espessura: espessura
+        });
+        contexto.globalAlpha = estadoDashboard.filtroFaixaConclusao &&
+          estadoDashboard.filtroFaixaConclusao !== faixa.chave ? .22 : 1;
+        contexto.strokeStyle = faixa.cor;
+        contexto.lineWidth = espessura;
+        contexto.lineCap = 'round';
+        contexto.beginPath();
+        contexto.arc(centroX, centroY, raio, inicio + .025, inicio + arco - .025);
+        contexto.stroke();
         inicio += arco;
       });
-      contexto.fillStyle = '#06063d'; contexto.font = '900 25px Arial'; contexto.textAlign = 'center'; contexto.fillText(total, centroX, centroY + 2);
-      contexto.fillStyle = '#77798b'; contexto.font = '700 10px Arial'; contexto.fillText('MAPROS', centroX, centroY + 20);
+      contexto.globalAlpha = 1;
+      contexto.fillStyle = '#06063d';
+      contexto.font = '900 23px Arial';
+      contexto.textAlign = 'center';
+      contexto.fillText(total, centroX, centroY + 2);
+      contexto.fillStyle = '#5f6071';
+      contexto.font = '700 10px Arial';
+      contexto.fillText('MAPROS', centroX, centroY + 20);
     }
-    const legenda = document.getElementById('legenda-conclusao'); legenda.replaceChildren();
+    canvas.setAttribute('aria-label', 'Distribuição de ' + total +
+      ' Mapros por percentual de conclusão. Use a legenda para filtrar.');
+    canvas.title = 'Clique em uma faixa ou use a legenda para filtrar';
+    const legenda = document.getElementById('legenda-conclusao');
+    legenda.replaceChildren();
     faixas.forEach(function (faixa) {
-      const item = document.createElement('div'); item.className = 'item-legenda-dashboard';
-      const cor = document.createElement('i'); cor.style.background = faixa.cor;
-      const texto = document.createElement('span'); texto.textContent = faixa.rotulo + ' · ' + faixa.total;
-      item.append(cor, texto); legenda.appendChild(item);
+      const ativo = estadoDashboard.filtroFaixaConclusao === faixa.chave;
+      const item = document.createElement('button');
+      item.type = 'button';
+      item.className = 'item-legenda-dashboard' + (ativo ? ' ativo' : '');
+      item.style.setProperty('--cor-faixa', faixa.cor);
+      item.setAttribute('aria-pressed', String(ativo));
+      item.setAttribute('aria-label', 'Filtrar por ' + faixa.rotulo + ': ' + faixa.total + ' Mapros');
+      const cor = document.createElement('i');
+      cor.style.background = faixa.cor;
+      const texto = document.createElement('span');
+      texto.textContent = faixa.rotulo + ' · ' + faixa.total;
+      item.append(cor, texto);
+      item.addEventListener('click', function () {
+        alternarFaixaConclusaoDashboard(faixa.chave);
+      });
+      legenda.appendChild(item);
     });
   }
 
   function contarPorDashboard(campo) {
     const contagem = {};
-    estadoDashboard.filtrados.forEach(function (projeto) {
-      const chave = String(projeto[campo] || 'Não informado'); contagem[chave] = (contagem[chave] || 0) + 1;
-    });
-    return Object.keys(contagem).map(function (chave) { return {rotulo: chave, total: contagem[chave]}; }).sort(function (a, b) { return b.total - a.total; });
+    obterProjetosCruzadosDashboard({ignorarPortfolio: campo === 'portfolio'})
+      .forEach(function (projeto) {
+        const chave = String(projeto[campo] || 'Não informado');
+        contagem[chave] = (contagem[chave] || 0) + 1;
+      });
+    return Object.keys(contagem).map(function (chave) {
+      return {rotulo: chave, total: contagem[chave]};
+    }).sort(function (a, b) { return b.total - a.total; });
   }
 
   function renderizarBarrasDashboard(id, itens, cores) {
-    const area = document.getElementById(id); area.replaceChildren();
-    const maior = Math.max.apply(null, itens.map(function (item) { return item.total; }).concat([1]));
-    if (!itens.length) { const vazio = document.createElement('p'); vazio.textContent = 'Nenhum projeto no recorte atual.'; area.appendChild(vazio); return; }
+    const area = document.getElementById(id);
+    const portfoliosOrdenados = id === 'grafico-portfolios'
+      ? valoresUnicosDashboard('portfolio') : [];
+    area.replaceChildren();
+    const maior = Math.max.apply(null, itens.map(function (item) {
+      return item.total;
+    }).concat([1]));
+    if (!itens.length) {
+      const vazio = document.createElement('p');
+      vazio.textContent = 'Nenhum projeto no recorte atual.';
+      area.appendChild(vazio);
+      return;
+    }
     itens.forEach(function (item, indice) {
-      const linha = document.createElement('div'); linha.className = 'linha-barra-dashboard';
-      const rotulo = document.createElement('span'); rotulo.textContent = item.rotulo;
-      const trilho = document.createElement('div'); trilho.className = 'trilho-barra-dashboard';
-      const barra = document.createElement('i'); barra.className = 'valor-barra-dashboard'; barra.style.width = ((item.total / maior) * 100) + '%'; barra.style.setProperty('--cor-barra', cores[indice % cores.length]);
-      const total = document.createElement('strong'); total.textContent = item.total;
-      trilho.appendChild(barra); linha.append(rotulo, trilho, total); area.appendChild(linha);
+      const indiceCor = id === 'grafico-portfolios'
+        ? Math.max(0, portfoliosOrdenados.indexOf(item.rotulo)) : indice;
+      const ativo = id === 'grafico-portfolios' &&
+        estadoDashboard.filtroGraficoPortfolio === item.rotulo;
+      const linha = document.createElement('button');
+      linha.type = 'button';
+      linha.className = 'linha-barra-dashboard' + (ativo ? ' ativo' : '');
+      linha.style.setProperty('--cor-barra-selecionada', cores[indiceCor % cores.length]);
+      linha.setAttribute('aria-pressed', String(ativo));
+      linha.setAttribute('aria-label', 'Filtrar por portfólio ' + item.rotulo +
+        ': ' + item.total + ' Mapros');
+      const rotulo = document.createElement('span');
+      rotulo.textContent = item.rotulo;
+      rotulo.title = item.rotulo;
+      const trilho = document.createElement('div');
+      trilho.className = 'trilho-barra-dashboard';
+      const barra = document.createElement('i');
+      barra.className = 'valor-barra-dashboard';
+      barra.style.width = ((item.total / maior) * 100) + '%';
+      barra.style.setProperty('--cor-barra', cores[indiceCor % cores.length]);
+      const total = document.createElement('strong');
+      total.textContent = item.total;
+      trilho.appendChild(barra);
+      linha.append(rotulo, trilho, total);
+      linha.addEventListener('click', function () {
+        if (id !== 'grafico-portfolios') return;
+        estadoDashboard.filtroGraficoPortfolio = ativo ? '' : item.rotulo;
+        estadoDashboard.paginaMapros = 1;
+        renderizarDashboard();
+      });
+      area.appendChild(linha);
     });
   }
 
   function formatarDataDashboard(valor) {
-    const partes = String(valor || '').split('-'); return partes.length === 3 ? partes[2] + '/' + partes[1] + '/' + partes[0] : '—';
+    const partes = String(valor || '').split('-');
+    return partes.length === 3 ? partes[2] + '/' + partes[1] + '/' + partes[0] : '—';
   }
 
-  function renderizarAtrasosDashboard() {
-    const linhas = [];
-    const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
-    estadoDashboard.filtrados.forEach(function (projeto) {
-      projeto.atividadesAtrasadas.forEach(function (atividade) {
-        const prazo = new Date(atividade.prazo + 'T00:00:00');
-        linhas.push({projeto: projeto, atividade: atividade, dias: Math.max(1, Math.floor((hoje - prazo) / 86400000))});
+  function criarChipFiltroDashboard(rotulo, aoRemover) {
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = 'chip-filtro-dashboard';
+    chip.textContent = rotulo;
+    chip.setAttribute('aria-label', 'Remover filtro ' + rotulo);
+    chip.addEventListener('click', aoRemover);
+    return chip;
+  }
+
+  function atualizarResumoFiltrosDashboard() {
+    const resumo = document.getElementById('resumo-filtros-dashboard');
+    const area = document.getElementById('chips-filtros-dashboard');
+    area.replaceChildren();
+    estadoDashboard.portfolios.forEach(function (portfolio) {
+      area.appendChild(criarChipFiltroDashboard('Portfólio: ' + portfolio, function () {
+        estadoDashboard.portfolios = estadoDashboard.portfolios.filter(function (item) {
+          return item !== portfolio;
+        });
+        atualizarRotuloPortfoliosDashboard();
+        montarMenuPortfoliosDashboard();
+        aplicarFiltrosDashboard();
+      }));
+    });
+    if (estadoDashboard.aba === 'mapros') {
+      const filtros = [
+        ['filtro-contagiro', 'Contagiro'], ['filtro-inicio-de', 'Início de'],
+        ['filtro-inicio-ate', 'Início até'], ['filtro-prazo-de', 'Prazo de'],
+        ['filtro-prazo-ate', 'Prazo até'], ['filtro-status', 'Status'],
+        ['filtro-area', 'Área'], ['filtro-nivel', 'Nível'],
+        ['filtro-lider', 'Líder'], ['filtro-mapro', 'Mapro']
+      ];
+      filtros.forEach(function (item) {
+        const campo = document.getElementById(item[0]);
+        if (!campo.value) return;
+        area.appendChild(criarChipFiltroDashboard(item[1] + ': ' + campo.value, function () {
+          campo.value = '';
+          if (item[0] === 'filtro-lider') fecharOpcoesLiderDashboard();
+          aplicarFiltrosDashboard();
+        }));
       });
-    });
-    document.getElementById('contador-atrasos').textContent = linhas.length;
-    const estado = document.getElementById('estado-atrasos-dashboard');
-    const container = document.getElementById('tabela-atrasos-container');
-    const corpo = document.getElementById('corpo-atrasos-dashboard'); corpo.replaceChildren();
-    estado.hidden = Boolean(linhas.length); container.hidden = !linhas.length;
-    estado.textContent = 'Nenhuma atividade em atraso para os filtros selecionados.';
-    linhas.sort(function (a, b) { return b.dias - a.dias; }).forEach(function (item) {
-      const tr = document.createElement('tr');
-      [item.projeto.id, item.projeto.nome, item.projeto.portfolio, item.atividade.descricao,
-        item.atividade.responsavel, formatarDataDashboard(item.atividade.prazo), item.dias + ' dia(s)']
-        .forEach(function (valor) { const td = document.createElement('td'); td.textContent = valor || '—'; tr.appendChild(td); });
-      corpo.appendChild(tr);
-    });
+      if (estadoDashboard.indicadorDetalhe) {
+        area.appendChild(criarChipFiltroDashboard(
+          tituloIndicadorDashboard(estadoDashboard.indicadorDetalhe), function () {
+            estadoDashboard.indicadorDetalhe = '';
+            estadoDashboard.paginaMapros = 1;
+            renderizarDashboard();
+          }
+        ));
+      }
+      if (estadoDashboard.filtroFaixaConclusao) {
+        const nomesFaixa = {menos50: 'Conclusão: menos de 50%', '50a70': 'Conclusão: 50% a 70%',
+          '70a90': 'Conclusão: 70% a 90%', '90mais': 'Conclusão: 90% ou mais'};
+        area.appendChild(criarChipFiltroDashboard(
+          nomesFaixa[estadoDashboard.filtroFaixaConclusao], function () {
+            estadoDashboard.filtroFaixaConclusao = '';
+            estadoDashboard.paginaMapros = 1;
+            renderizarDashboard();
+          }
+        ));
+      }
+      if (estadoDashboard.filtroGraficoPortfolio) {
+        area.appendChild(criarChipFiltroDashboard(
+          'Gráfico: ' + estadoDashboard.filtroGraficoPortfolio, function () {
+            estadoDashboard.filtroGraficoPortfolio = '';
+            estadoDashboard.paginaMapros = 1;
+            renderizarDashboard();
+          }
+        ));
+      }
+    } else if (estadoDashboard.indicadorAtividades) {
+      area.appendChild(criarChipFiltroDashboard(
+        tituloAtividadesDashboard(estadoDashboard.indicadorAtividades), function () {
+          estadoDashboard.indicadorAtividades = '';
+          estadoDashboard.paginaAtividades = 1;
+          renderizarDashboard();
+        }
+      ));
+    }
+    resumo.hidden = !area.children.length;
   }
 
-  function trocarAbaDashboard(aba) {
-    estadoDashboard.aba = aba;
-    document.getElementById('aba-geral-dashboard').hidden = aba !== 'geral';
-    document.getElementById('aba-atrasos-dashboard').hidden = aba !== 'atrasos';
-    document.querySelectorAll('.aba-dashboard').forEach(function (botao) {
-      const ativa = botao.dataset.aba === aba; botao.classList.toggle('ativa', ativa); botao.setAttribute('aria-selected', String(ativa));
-    });
-  }
-
-  document.querySelectorAll('.aba-dashboard').forEach(function (botao) { botao.addEventListener('click', function () { trocarAbaDashboard(this.dataset.aba); }); });
-  let temporizadorBuscaDashboard;
-  document.querySelectorAll('.filtros-dashboard input:not([type="search"]), .filtros-dashboard select').forEach(function (campo) {
-    campo.addEventListener('change', function () {
-      aplicarFiltrosDashboard();
-      if (campo.id === 'filtro-portfolio') montarMenuPortfoliosDashboard();
-    });
-  });
-  document.getElementById('filtro-mapro').addEventListener('input', function () {
-    clearTimeout(temporizadorBuscaDashboard);
-    temporizadorBuscaDashboard = setTimeout(aplicarFiltrosDashboard, 250);
-  });
-  document.getElementById('limpar-filtros-dashboard').addEventListener('click', function () {
-    document.querySelectorAll('.filtros-dashboard input, .filtros-dashboard select').forEach(function (campo) { campo.value = ''; });
-    estadoDashboard.portfolio = ''; montarMenuPortfoliosDashboard(); aplicarFiltrosDashboard();
-  });
-  document.getElementById('alternar-portfolios-dashboard').addEventListener('click', function () {
-    const layout = document.getElementById('layout-dashboard'); const recolhido = layout.classList.toggle('portfolios-recolhidos'); this.setAttribute('aria-expanded', String(!recolhido));
-  });
-  document.getElementById('fechar-detalhes-indicador-dashboard').addEventListener('click', function () {
+  function limparTodosFiltrosDashboard() {
+    document.querySelectorAll('.filtros-dashboard input, .filtros-dashboard select')
+      .forEach(function (campo) { campo.value = ''; });
+    estadoDashboard.portfolios = [];
     estadoDashboard.indicadorDetalhe = '';
-    renderizarIndicadoresDashboard();
+    estadoDashboard.indicadorAtividades = '';
+    estadoDashboard.filtroFaixaConclusao = '';
+    estadoDashboard.filtroGraficoPortfolio = '';
+    estadoDashboard.buscaTabelaMapros = '';
+    estadoDashboard.buscaTabelaAtividades = '';
+    estadoDashboard.paginaMapros = 1;
+    estadoDashboard.paginaAtividades = 1;
+    document.getElementById('pesquisa-tabela-mapros-dashboard').value = '';
+    document.getElementById('pesquisa-tabela-atividades-dashboard').value = '';
+    document.getElementById('pesquisar-portfolio-dashboard').value = '';
+    atualizarRotuloPortfoliosDashboard();
+    montarMenuPortfoliosDashboard();
+    fecharOpcoesLiderDashboard();
+    aplicarFiltrosDashboard();
+  }
+
+  function criarDebounceDashboard(funcao, espera) {
+    let temporizador;
+    return function () {
+      const argumentos = arguments;
+      clearTimeout(temporizador);
+      temporizador = setTimeout(function () { funcao.apply(null, argumentos); }, espera);
+    };
+  }
+
+  function alternarPainelDashboard(botaoId, painelId) {
+    const botao = document.getElementById(botaoId);
+    const painel = document.getElementById(painelId);
+    painel.hidden = !painel.hidden;
+    botao.setAttribute('aria-expanded', String(!painel.hidden));
+    if (!painel.hidden) {
+      const primeiroCampo = painel.querySelector('input, select');
+      if (primeiroCampo) primeiroCampo.focus();
+    }
+  }
+
+  document.querySelectorAll('[data-aba-dashboard]').forEach(function (botao) {
+    botao.addEventListener('click', function () {
+      alternarAbaDashboard(botao.dataset.abaDashboard);
+      aplicarFiltrosDashboard();
+    });
+    botao.addEventListener('keydown', function (evento) {
+      if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(evento.key)) return;
+      evento.preventDefault();
+      const abas = Array.from(document.querySelectorAll('[data-aba-dashboard]'));
+      const indice = abas.indexOf(botao);
+      const destino = evento.key === 'Home' ? 0 : evento.key === 'End' ? abas.length - 1
+        : (indice + (evento.key === 'ArrowRight' ? 1 : -1) + abas.length) % abas.length;
+      abas[destino].focus();
+      abas[destino].click();
+    });
+  });
+  document.getElementById('abrir-filtros-dashboard').addEventListener('click', function () {
+    alternarPainelDashboard('abrir-filtros-dashboard', 'painel-filtros-dashboard');
+  });
+  document.getElementById('abrir-portfolios-dashboard').addEventListener('click', function () {
+    alternarPainelDashboard('abrir-portfolios-dashboard', 'menu-selecao-portfolios');
+  });
+  document.getElementById('alternar-painel-indicadores-atividades-dashboard')
+    .addEventListener('click', function () {
+      const painel = document.getElementById('painel-indicadores-atividades-dashboard');
+      const botao = document.getElementById('alternar-painel-indicadores-atividades-dashboard');
+      estadoDashboard.menuIndicadoresAtividadesRecolhido =
+        !estadoDashboard.menuIndicadoresAtividadesRecolhido;
+      painel.classList.toggle('recolhido', estadoDashboard.menuIndicadoresAtividadesRecolhido);
+      botao.textContent = estadoDashboard.menuIndicadoresAtividadesRecolhido ? '›' : '‹';
+      botao.setAttribute('aria-expanded',
+        String(!estadoDashboard.menuIndicadoresAtividadesRecolhido));
+      botao.setAttribute('aria-label', estadoDashboard.menuIndicadoresAtividadesRecolhido
+        ? 'Expandir indicadores' : 'Recolher indicadores');
+    });
+  document.getElementById('pesquisar-portfolio-dashboard')
+    .addEventListener('input', montarMenuPortfoliosDashboard);
+  document.getElementById('filtro-lider').addEventListener('focus', abrirOpcoesLiderDashboard);
+  const aplicarFiltrosComEsperaDashboard = criarDebounceDashboard(aplicarFiltrosDashboard, 250);
+  document.getElementById('filtro-lider').addEventListener('input', function () {
+    abrirOpcoesLiderDashboard();
+    aplicarFiltrosComEsperaDashboard();
+  });
+  document.getElementById('filtro-lider').addEventListener('keydown', function (evento) {
+    if (evento.key === 'ArrowDown') {
+      evento.preventDefault();
+      abrirOpcoesLiderDashboard();
+      const primeira = document.querySelector('#opcoes-lider-dashboard .opcao-lider-dashboard');
+      if (primeira) primeira.focus();
+    }
+    if (evento.key === 'Escape') fecharOpcoesLiderDashboard();
+  });
+  document.addEventListener('keydown', function (evento) {
+    if (evento.key !== 'Escape') return;
+    ['menu-selecao-portfolios', 'painel-filtros-dashboard', 'opcoes-lider-dashboard']
+      .forEach(function (id) {
+      document.getElementById(id).hidden = true;
+    });
+    ['abrir-portfolios-dashboard', 'abrir-filtros-dashboard'].forEach(function (id) {
+      document.getElementById(id).setAttribute('aria-expanded', 'false');
+    });
+    document.getElementById('filtro-lider').setAttribute('aria-expanded', 'false');
+  });
+  document.addEventListener('click', function (evento) {
+    if (!evento.target.closest('.seletor-portfolio-dashboard')) {
+      document.getElementById('menu-selecao-portfolios').hidden = true;
+      document.getElementById('abrir-portfolios-dashboard')
+        .setAttribute('aria-expanded', 'false');
+    }
+    if (!evento.target.closest('.seletor-lider-dashboard')) fecharOpcoesLiderDashboard();
+  });
+  document.querySelectorAll('.filtros-dashboard input, .filtros-dashboard select')
+    .forEach(function (campo) {
+      if (campo.id === 'filtro-lider') return;
+      const evento = campo.type === 'search' ? 'input' : 'change';
+      campo.addEventListener(evento,
+        campo.type === 'search' ? aplicarFiltrosComEsperaDashboard : aplicarFiltrosDashboard);
+    });
+  document.getElementById('limpar-filtros-dashboard')
+    .addEventListener('click', limparTodosFiltrosDashboard);
+  document.getElementById('limpar-todos-filtros-dashboard')
+    .addEventListener('click', limparTodosFiltrosDashboard);
+  document.getElementById('atualizar-dashboard').addEventListener('click', iniciarDashboard);
+  document.getElementById('grafico-conclusao').addEventListener('click', function (evento) {
+    const canvas = evento.currentTarget;
+    const caixa = canvas.getBoundingClientRect();
+    if (!caixa.width || !caixa.height) return;
+    const x = (evento.clientX - caixa.left) * canvas.width / caixa.width;
+    const y = (evento.clientY - caixa.top) * canvas.height / caixa.height;
+    const segmento = estadoDashboard.segmentosRosca.find(function (item) {
+      const distancia = Math.hypot(x - item.centroX, y - item.centroY);
+      let angulo = Math.atan2(y - item.centroY, x - item.centroX);
+      if (angulo < -Math.PI / 2) angulo += Math.PI * 2;
+      return Math.abs(distancia - item.raio) <= item.espessura / 2 + 3 &&
+        angulo >= item.inicio && angulo <= item.fim;
+    });
+    if (segmento) alternarFaixaConclusaoDashboard(segmento.chave);
+  });
+  const buscarMaprosComEsperaDashboard = criarDebounceDashboard(function (valor) {
+    estadoDashboard.buscaTabelaMapros = valor;
+    estadoDashboard.paginaMapros = 1;
+    renderizarDetalhesIndicadorDashboard();
+  }, 250);
+  document.getElementById('pesquisa-tabela-mapros-dashboard').addEventListener('input', function () {
+    buscarMaprosComEsperaDashboard(this.value);
+  });
+  document.getElementById('tamanho-pagina-mapros-dashboard').addEventListener('change', function () {
+    estadoDashboard.tamanhoPaginaMapros = Number(this.value) || 20;
+    estadoDashboard.paginaMapros = 1;
     renderizarDetalhesIndicadorDashboard();
   });
-  document.getElementById('voltar-dashboard').addEventListener('click', function () { MaproUI.navigate(estadoDashboard.dados.urlAplicacao, 'Voltando ao início...'); });
+  document.querySelectorAll('[data-pagina-mapros]').forEach(function (botao) {
+    botao.addEventListener('click', function () {
+      estadoDashboard.paginaMapros += botao.dataset.paginaMapros === 'proxima' ? 1 : -1;
+      renderizarDetalhesIndicadorDashboard();
+    });
+  });
+  const buscarAtividadesComEsperaDashboard = criarDebounceDashboard(function (valor) {
+    estadoDashboard.buscaTabelaAtividades = valor;
+    estadoDashboard.paginaAtividades = 1;
+    renderizarMinhasAtividadesDashboard();
+  }, 250);
+  document.getElementById('pesquisa-tabela-atividades-dashboard')
+    .addEventListener('input', function () { buscarAtividadesComEsperaDashboard(this.value); });
+  document.getElementById('tamanho-pagina-atividades-dashboard')
+    .addEventListener('change', function () {
+      estadoDashboard.tamanhoPaginaAtividades = Number(this.value) || 20;
+      estadoDashboard.paginaAtividades = 1;
+      renderizarMinhasAtividadesDashboard();
+    });
+  document.querySelectorAll('[data-pagina-atividades]').forEach(function (botao) {
+    botao.addEventListener('click', function () {
+      estadoDashboard.paginaAtividades +=
+        botao.dataset.paginaAtividades === 'proxima' ? 1 : -1;
+      renderizarMinhasAtividadesDashboard();
+    });
+  });
+  document.getElementById('fechar-detalhes-indicador-dashboard')
+    .addEventListener('click', function () {
+      estadoDashboard.indicadorDetalhe = '';
+      estadoDashboard.paginaMapros = 1;
+      renderizarDashboard();
+    });
+  document.getElementById('limpar-filtro-atividades-dashboard')
+    .addEventListener('click', function () {
+      estadoDashboard.indicadorAtividades = '';
+      estadoDashboard.paginaAtividades = 1;
+      renderizarDashboard();
+    });
+  document.getElementById('voltar-dashboard').addEventListener('click', function () {
+    if (estadoDashboard.dados) {
+      MaproUI.navigate(estadoDashboard.dados.urlAplicacao, 'Voltando ao início...');
+    }
+  });
   iniciarDashboard();
 </script>

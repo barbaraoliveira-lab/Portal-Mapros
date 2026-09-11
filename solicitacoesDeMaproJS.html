@@ -1230,7 +1230,7 @@
   });
   document.querySelectorAll('.fundo-modal').forEach(function (fundo) {
     fundo.addEventListener('click', function (evento) {
-      if (evento.target === fundo) fecharModal(fundo.id);
+      if (evento.target === fundo && fundo.id !== 'modal-solicitacao') fecharModal(fundo.id);
     });
   });
   document.addEventListener('click', function (evento) {
@@ -1253,7 +1253,7 @@
     if (evento.key !== 'Escape') return;
     const modaisAbertos = document.querySelectorAll('.fundo-modal:not([hidden])');
     const aberto = modaisAbertos.length ? modaisAbertos[modaisAbertos.length - 1] : null;
-    if (aberto) fecharModal(aberto.id);
+    if (aberto && aberto.id !== 'modal-solicitacao') fecharModal(aberto.id);
   });
 
   configurarMenusPesquisaSolicitacoes();
