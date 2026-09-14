@@ -261,7 +261,7 @@ function carregarSistema() {
         CONFIG.logoEmpresaId + '&sz=w4000',
       logoCadastroUrl: 'https://drive.google.com/thumbnail?id=' +
         CONFIG.logoCadastroId + '&sz=w4000',
-      urlAplicacao: ScriptApp.getService().getUrl(),
+      urlAplicacao: obterUrlPublicaAplicacao_(),
       corPrincipal: CONFIG.corPrincipal,
       email: email
     };
@@ -473,7 +473,7 @@ function carregarPaginaSolicitacoesMapro() {
         ),
         logoUrl: 'https://drive.google.com/thumbnail?id=' +
           CONFIG.logoCadastroId + '&sz=w4000',
-        urlAplicacao: ScriptApp.getService().getUrl()
+        urlAplicacao: obterUrlPublicaAplicacao_()
       }
     };
   } catch (erro) {
@@ -1975,15 +1975,17 @@ function registrarUrlPublicaAplicacao_(urlInformada) {
 }
 
 function obterUrlPublicaAplicacao_() {
+  const urlServico = String(ScriptApp.getService().getUrl() || '').trim().replace(/\/+$/, '');
+  if (/^https:\/\/script\.google\.com\/macros\/s\/[A-Za-z0-9_-]+\/exec$/.test(urlServico)) {
+    return urlServico;
+  }
   const propriedades = PropertiesService.getScriptProperties();
   const configurada = String(propriedades.getProperty(CONFIG.propriedadeUrlWebApp) || '')
     .trim().replace(/\/+$/, '');
   if (/^https:\/\/script\.google\.com\/macros\/s\/[A-Za-z0-9_-]+\/exec$/.test(configurada)) {
     return configurada;
   }
-  const urlServico = String(ScriptApp.getService().getUrl() || '').trim().replace(/\/+$/, '');
-  if (!urlServico) throw new Error('A URL pública do Web App não está configurada.');
-  return urlServico;
+  throw new Error('A URL pública do Web App não está configurada.');
 }
 
 function montarMensagemResultadoEmails_(resultado) {
@@ -2008,18 +2010,18 @@ function montarMensagemResultadoEmailsRejeicao_(resultado) {
     ' e-mail(s), mas ' + problemas + ' destinatário(s) não puderam ser notificados.';
 }
 
+function formatarListaPontuadaEmail_(valor, padrao) {
+  const itens = String(valor == null ? '' : valor).split(/\r?\n|;/)
+    .map(function (item) { return item.trim().replace(/[,.]+$/, ''); })
+    .filter(Boolean);
+  if (!itens.length) return padrao || 'Não informados';
+  return itens.join(', ') + '.';
+}
+
 function montarSecoesDadosSolicitacaoEmail_(solicitacao, rotuloId, valorId) {
   function valorOuPadrao(valor, padrao) {
     const texto = String(valor == null ? '' : valor).trim();
     return texto || padrao || 'Não informado';
-  }
-
-  function formatarIndicadores(valor) {
-    const itens = String(valor == null ? '' : valor).split(/\r?\n|;/)
-      .map(function (item) { return item.trim().replace(/[,.]+$/, ''); })
-      .filter(Boolean);
-    if (!itens.length) return 'Não informados';
-    return itens.join(', ') + '.';
   }
 
   return [
@@ -2053,7 +2055,7 @@ function montarSecoesDadosSolicitacaoEmail_(solicitacao, rotuloId, valorId) {
         ['Por que', valorOuPadrao(solicitacao.PORQUE)],
         ['Resultados esperados', valorOuPadrao(solicitacao.RESULTADOS_ESPERADOS, 'Não informados')],
         ['Indicadores definidos?', valorOuPadrao(solicitacao.POSSUI_INDICADORES_DEFINIDOS)],
-        ['Indicadores do projeto', formatarIndicadores(solicitacao.INDICADORES)]
+        ['Indicadores do projeto', formatarListaPontuadaEmail_(solicitacao.INDICADORES)]
       ]
     },
     {
@@ -2061,7 +2063,7 @@ function montarSecoesDadosSolicitacaoEmail_(solicitacao, rotuloId, valorId) {
       campos: [
         ['Processo crítico?', valorOuPadrao(solicitacao.PROCESSO_CRITICO)],
         ['Envolve sistema?', valorOuPadrao(solicitacao.ENVOLVE_SISTEMA)],
-        ['Sistema(s) envolvido(s)', valorOuPadrao(solicitacao.SISTEMAS_ENVOLVIDOS, 'Não informados')]
+        ['Sistema(s) envolvido(s)', formatarListaPontuadaEmail_(solicitacao.SISTEMAS_ENVOLVIDOS)]
       ]
     }
   ];

@@ -2465,10 +2465,10 @@ function montarEmailAberturaProjetoTextoMapro_(destinatario, mapro) {
     'O que é o projeto: ' + String(mapro.O_QUE_E || 'Não informado'),
     'Por que: ' + String(mapro.PORQUE || 'Não informado'),
     'Resultados esperados: ' + String(mapro.RESULTADOS_ESPERADOS || 'Não informados'),
-    'Indicadores: ' + String(mapro.INDICADORES || 'Não informados'),
+    'Indicadores: ' + formatarListaPontuadaEmail_(mapro.INDICADORES),
     'Processo crítico: ' + String(mapro.PROCESSO_CRITICO || 'Não informado'),
     'Envolve sistema: ' + String(mapro.ENVOLVE_SISTEMA || 'Não informado'),
-    'Sistema(s) envolvido(s): ' + String(mapro.SISTEMAS_ENVOLVIDOS || 'Não informados'),
+    'Sistema(s) envolvido(s): ' + formatarListaPontuadaEmail_(mapro.SISTEMAS_ENVOLVIDOS),
     '',
     'Acessar projeto: ' + montarUrlProjetoMapro_(mapro.ID_MAPRO),
     '',
@@ -2506,10 +2506,10 @@ function montarEmailAberturaProjetoHtmlMapro_(destinatario, mapro) {
     montarLinhaEmail_('O que é o projeto', String(mapro.O_QUE_E || 'Não informado')) +
     montarLinhaEmail_('Por que', String(mapro.PORQUE || 'Não informado')) +
     montarLinhaEmail_('Resultados esperados', String(mapro.RESULTADOS_ESPERADOS || 'Não informados')) +
-    montarLinhaEmail_('Indicadores', String(mapro.INDICADORES || 'Não informados')) +
+    montarLinhaEmail_('Indicadores', formatarListaPontuadaEmail_(mapro.INDICADORES)) +
     montarLinhaEmail_('Processo crítico', String(mapro.PROCESSO_CRITICO || 'Não informado')) +
     montarLinhaEmail_('Envolve sistema', String(mapro.ENVOLVE_SISTEMA || 'Não informado')) +
-    montarLinhaEmail_('Sistema(s) envolvido(s)', String(mapro.SISTEMAS_ENVOLVIDOS || 'Não informados')) +
+    montarLinhaEmail_('Sistema(s) envolvido(s)', formatarListaPontuadaEmail_(mapro.SISTEMAS_ENVOLVIDOS)) +
     '</table><table role="presentation" width="100%"><tr><td align="center">' +
     '<a href="' + escaparHtml_(urlProjeto) + '" style="display:inline-block;padding:14px 28px;border-radius:9px;background:#06063d;color:#fff;text-decoration:none;font-weight:800">ACESSAR PROJETO</a>' +
     '</td></tr></table></td></tr><tr><td align="center" style="background:#06063d;color:#fff;padding:15px;font-size:12px;font-weight:800">' +
@@ -3091,6 +3091,7 @@ function enviarEmailConclusaoProjetoMapro_(mapro, atividades, concluidaEm) {
     const dias = Number.isNaN(inicio.getTime()) || Number.isNaN(fim.getTime())
       ? null : Math.max(0, Math.ceil((fim.getTime() - inicio.getTime()) / 86400000));
     const duracao = dias == null ? 'Não calculado' : dias + (dias === 1 ? ' dia' : ' dias');
+    const logoUrl = 'https://drive.google.com/thumbnail?id=' + CONFIG.logoId + '&sz=w4000';
     const url = montarUrlProjetoMapro_(mapro.ID_MAPRO);
     const linhas = [
       montarLinhaEmail_('ID da Mapro', formatarId_(Number(mapro.ID_MAPRO))),
@@ -3109,10 +3110,10 @@ function enviarEmailConclusaoProjetoMapro_(mapro, atividades, concluidaEm) {
       montarLinhaEmail_('O que é o projeto', String(mapro.O_QUE_E || '')),
       montarLinhaEmail_('Por que', String(mapro.PORQUE || '')),
       montarLinhaEmail_('Resultados esperados', String(mapro.RESULTADOS_ESPERADOS || '')),
-      montarLinhaEmail_('Indicadores', String(mapro.INDICADORES || '')),
+      montarLinhaEmail_('Indicadores', formatarListaPontuadaEmail_(mapro.INDICADORES)),
       montarLinhaEmail_('Processo crítico?', String(mapro.PROCESSO_CRITICO || '')),
       montarLinhaEmail_('Envolve sistema?', String(mapro.ENVOLVE_SISTEMA || '')),
-      montarLinhaEmail_('Sistemas envolvidos', String(mapro.SISTEMAS_ENVOLVIDOS || '')),
+      montarLinhaEmail_('Sistemas envolvidos', formatarListaPontuadaEmail_(mapro.SISTEMAS_ENVOLVIDOS)),
       montarLinhaEmail_('Total de atividades/subatividades', String(operacionais.length)),
       montarLinhaEmail_('Tempo até a conclusão', duracao)
     ].join('');
@@ -3133,14 +3134,16 @@ function enviarEmailConclusaoProjetoMapro_(mapro, atividades, concluidaEm) {
         'O que é o projeto: ' + String(mapro.O_QUE_E || '') + '\n' +
         'Por que: ' + String(mapro.PORQUE || '') + '\n' +
         'Resultados esperados: ' + String(mapro.RESULTADOS_ESPERADOS || '') + '\n' +
-        'Indicadores: ' + String(mapro.INDICADORES || '') + '\n' +
+        'Indicadores: ' + formatarListaPontuadaEmail_(mapro.INDICADORES) + '\n' +
+        'Sistemas envolvidos: ' + formatarListaPontuadaEmail_(mapro.SISTEMAS_ENVOLVIDOS) + '\n' +
         'Total de atividades/subatividades: ' + operacionais.length + '\n' +
         'Tempo até a conclusão: ' + duracao + '\n\nAcessar projeto: ' + url +
         '\n\nCORPORATIVO | P&G | SGI',
       htmlBody: '<!doctype html><html><body style="margin:0;padding:0;background:#f3f4f7;font-family:Arial,sans-serif;color:#06063d">' +
         '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f3f4f7;padding:28px 12px"><tr><td align="center">' +
         '<table role="presentation" width="600" cellspacing="0" cellpadding="0" style="width:100%;max-width:600px;background:#fff;border-radius:16px;overflow:hidden">' +
-        '<tr><td align="center" style="background:#06063d;padding:16px;color:#fff;font-weight:800">SGI MAPRO</td></tr>' +
+        '<tr><td align="center" style="background:#06063d;padding:8px 20px;overflow:hidden">' +
+        '<img src="' + escaparHtml_(logoUrl) + '" alt="SGI Mapro" width="320" style="display:block;width:72%;max-width:320px;height:auto;transform:scale(1.3);transform-origin:center"></td></tr>' +
         '<tr><td style="padding:30px 34px;font-size:14px;line-height:1.6">' +
         '<p style="margin:0 0 8px;color:#087f19;font-size:12px;font-weight:800;text-transform:uppercase">Projeto concluído</p>' +
         '<h1 style="margin:0 0 14px;font-size:22px">A Mapro foi concluída</h1>' +
@@ -3279,6 +3282,7 @@ function enviarAvisosInativacaoResponsavelMapro_(avisos) {
   (avisos || []).forEach(function (aviso) {
     try {
       const mapro = aviso.mapro;
+      const logoUrl = 'https://drive.google.com/thumbnail?id=' + CONFIG.logoId + '&sz=w4000';
       const url = montarUrlProjetoMapro_(mapro.ID_MAPRO);
       const listaTexto = aviso.atividades.map(function (nome) { return '- ' + nome; }).join('\n');
       const listaHtml = aviso.atividades.map(function (nome) {
@@ -3293,7 +3297,8 @@ function enviarAvisosInativacaoResponsavelMapro_(avisos) {
         htmlBody: '<!doctype html><html><body style="margin:0;padding:0;background:#f3f4f7;font-family:Arial,sans-serif;color:#06063d">' +
           '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f3f4f7;padding:28px 12px"><tr><td align="center">' +
           '<table role="presentation" width="580" cellspacing="0" cellpadding="0" style="width:100%;max-width:580px;background:#fff;border-radius:16px;overflow:hidden">' +
-          '<tr><td align="center" style="background:#06063d;padding:16px;color:#fff;font-weight:800">SGI MAPRO</td></tr>' +
+          '<tr><td align="center" style="background:#06063d;padding:8px 20px;overflow:hidden">' +
+        '<img src="' + escaparHtml_(logoUrl) + '" alt="SGI Mapro" width="320" style="display:block;width:72%;max-width:320px;height:auto;transform:scale(1.3);transform-origin:center"></td></tr>' +
           '<tr><td style="padding:30px 34px;font-size:14px;line-height:1.6">' +
           '<p style="margin:0 0 8px;color:#ec0e37;font-size:12px;font-weight:800;text-transform:uppercase">Reatribuição necessária</p>' +
           '<h1 style="margin:0 0 14px;font-size:22px">Um responsável foi inativado</h1>' +

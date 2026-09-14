@@ -1107,12 +1107,15 @@
         .excluirSolicitacaoMapro(solicitacaoSelecionada.idSolicitacao);
     } else {
       const referencia = String(document.referrer || '');
-      const urlPublicaEncontrada = referencia.match(
+      const urlServidor = String(dadosPagina && dadosPagina.urlAplicacao || '').match(
         /https:\/\/script\.google\.com\/macros\/s\/[A-Za-z0-9_-]+\/exec/
       );
-      const urlWebAppAtual = urlPublicaEncontrada
-        ? urlPublicaEncontrada[0]
-        : window.location.origin + window.location.pathname;
+      const urlReferencia = referencia.match(
+        /https:\/\/script\.google\.com\/macros\/s\/[A-Za-z0-9_-]+\/exec/
+      );
+      const urlWebAppAtual = urlServidor
+        ? urlServidor[0]
+        : (urlReferencia ? urlReferencia[0] : '');
       google.script.run.withSuccessHandler(sucesso).withFailureHandler(falha)
         .atualizarStatusSolicitacaoMapro(
           solicitacaoSelecionada.idSolicitacao,
