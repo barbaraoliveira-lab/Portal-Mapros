@@ -261,7 +261,7 @@ function carregarSistema() {
         CONFIG.logoEmpresaId + '&sz=w4000',
       logoCadastroUrl: 'https://drive.google.com/thumbnail?id=' +
         CONFIG.logoCadastroId + '&sz=w4000',
-      urlAplicacao: obterUrlPublicaAplicacao_(),
+      urlAplicacao: ScriptApp.getService().getUrl(),
       corPrincipal: CONFIG.corPrincipal,
       email: email
     };
@@ -473,7 +473,7 @@ function carregarPaginaSolicitacoesMapro() {
         ),
         logoUrl: 'https://drive.google.com/thumbnail?id=' +
           CONFIG.logoCadastroId + '&sz=w4000',
-        urlAplicacao: obterUrlPublicaAplicacao_()
+        urlAplicacao: ScriptApp.getService().getUrl()
       }
     };
   } catch (erro) {
