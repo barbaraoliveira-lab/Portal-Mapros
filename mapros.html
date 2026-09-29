@@ -3,6 +3,7 @@
   <head>
     <base target="_top">
     <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="preload" as="image"
       href="https://drive.google.com/thumbnail?id=1xu3olDb4OIgL2QzIKreygYr-J_oC3cv3&amp;sz=w4000"
       fetchpriority="high">
@@ -264,13 +265,22 @@
                   </label>
                 </div>
                 <div class="grade-complementos-mapro">
-                  <fieldset class="pergunta-complementar-mapro">
-                    <legend>É um processo crítico?</legend>
-                    <div class="opcoes-binarias-mapro">
-                      <label><input type="radio" name="mapro-processo-critico" value="SIM"><span>Sim</span></label>
-                      <label><input type="radio" name="mapro-processo-critico" value="NÃO"><span>Não</span></label>
-                    </div>
-                  </fieldset>
+                  <div class="cartao-perguntas-estrategicas-mapro">
+                    <fieldset class="pergunta-complementar-mapro pergunta-interna-mapro">
+                      <legend>É um processo crítico?</legend>
+                      <div class="opcoes-binarias-mapro">
+                        <label><input type="radio" name="mapro-processo-critico" value="SIM"><span>Sim</span></label>
+                        <label><input type="radio" name="mapro-processo-critico" value="NÃO"><span>Não</span></label>
+                      </div>
+                    </fieldset>
+                    <fieldset class="pergunta-complementar-mapro pergunta-interna-mapro">
+                      <legend>Esse projeto faz parte de uma iniciativa estratégica?</legend>
+                      <div class="opcoes-binarias-mapro">
+                        <label><input type="radio" name="mapro-iniciativa-estrategica" value="SIM"><span>Sim</span></label>
+                        <label><input type="radio" name="mapro-iniciativa-estrategica" value="NÃO"><span>Não</span></label>
+                      </div>
+                    </fieldset>
+                  </div>
                   <fieldset class="pergunta-complementar-mapro">
                     <legend>O projeto envolverá algum sistema?</legend>
                     <div class="linha-resposta-sistemas-mapro">
@@ -350,6 +360,10 @@
       <table id="tabela-cabecalho-fixo-atividades-mapro"
         class="tabela-usuarios tabela-atividades-mapro tabela-cabecalho-fixo-atividades-mapro"></table>
     </div>
+    <div id="rolagem-horizontal-fixa-mapro" class="rolagem-horizontal-fixa-mapro"
+      aria-label="Rolagem horizontal fixa do corpo do projeto" hidden>
+      <div id="espaco-rolagem-horizontal-fixa-mapro"></div>
+    </div>
     <div id="modal-informacao-cabecalho-mapro" class="fundo-modal" hidden>
       <section class="modal modal-informacao-cabecalho-mapro" role="dialog" aria-modal="true"
         aria-labelledby="titulo-modal-informacao-cabecalho-mapro">
@@ -403,7 +417,8 @@
               <div><dt>Por que</dt><dd>Explique o problema, a necessidade ou a oportunidade que justifica o projeto.</dd></div>
               <div><dt>Resultados esperados</dt><dd>São as principais entregas que o projeto deve gerar, ou seja, o que será melhorado ou modificado quando finalizado. Liste os resultados de forma clara, preferencialmente de forma mensurável. <strong>Exemplo: “Redução de 30% no tempo de resposta ao cliente em até 3 meses após a implantação”.</strong></dd></div>
               <div><dt>Indicadores do projeto</dt><dd>Informe as métricas utilizadas para acompanhar o desempenho e os resultados.</dd></div>
-              <div><dt>Processo crítico</dt><dd>Informe se o projeto está relacionado a um processo considerado crítico para a operação.</dd></div>
+              <div><dt>Processo crítico</dt><dd>Impacta a receita, o cliente externo e a estratégia da empresa.</dd></div>
+              <div><dt>Iniciativa estratégica</dt><dd>Informe se o projeto faz parte de uma iniciativa estratégica da empresa.</dd></div>
               <div><dt>Envolvimento de sistema</dt><dd>Marque Sim quando o projeto envolver algum sistema e informe qual ou quais sistemas serão impactados.</dd></div>
             </dl>
           </section>

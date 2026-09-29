@@ -3,6 +3,7 @@
   <head>
     <base target="_top">
     <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="preload" as="image"
       href="https://drive.google.com/thumbnail?id=1xu3olDb4OIgL2QzIKreygYr-J_oC3cv3&amp;sz=w4000"
       fetchpriority="high">
@@ -68,6 +69,14 @@
           <button id="rejeitar-solicitacao" class="botao-icone acao-rejeitar" type="button"
             aria-label="Rejeitar solicitação selecionada" title="Rejeitar solicitação selecionada">
             <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m9 9 6 6M15 9l-6 6"/></svg>
+          </button>
+          <button id="reenviar-emails-aprovacao" class="botao-icone" type="button" disabled
+            aria-label="Reenviar e-mails da solicitação aprovada" title="Reenviar e-mails de aprovação">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16v12H4zM4 7l8 6 8-6M18 3l3 3-3 3M21 6h-5"/></svg>
+          </button>
+          <button id="reprocessar-fila-emails" class="botao-icone" type="button"
+            aria-label="Reprocessar e-mails pendentes" title="Reprocessar e-mails pendentes">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5M6.1 8.2A7 7 0 0 1 18.8 7M17.9 15.8A7 7 0 0 1 5.2 17"/></svg>
           </button>
         </div>
 
@@ -260,6 +269,13 @@
                 </div>
               </fieldset>
               <fieldset class="pergunta-complementar-solicitacao">
+                <legend>Esse projeto faz parte de uma iniciativa estratégica?</legend>
+                <div class="opcoes-binarias-solicitacao">
+                  <label><input type="radio" name="iniciativa-estrategica-solicitacao" value="SIM" required><span>Sim</span></label>
+                  <label><input type="radio" name="iniciativa-estrategica-solicitacao" value="NÃO" required><span>Não</span></label>
+                </div>
+              </fieldset>
+              <fieldset class="pergunta-complementar-solicitacao pergunta-sistema-solicitacao">
                 <legend>O projeto envolverá algum sistema?</legend>
                 <div class="opcoes-binarias-solicitacao">
                   <label><input type="radio" name="envolve-sistema-solicitacao" value="SIM" required><span>Sim</span></label>
@@ -333,6 +349,8 @@
               <dl>
                 <div><dt>Processo crítico?</dt>
                   <dd data-detalhe-solicitacao="processoCritico"></dd></div>
+                <div><dt>Faz parte de iniciativa estratégica?</dt>
+                  <dd data-detalhe-solicitacao="iniciativaEstrategica"></dd></div>
                 <div><dt>Envolve sistema?</dt>
                   <dd data-detalhe-solicitacao="envolveSistema"></dd></div>
                 <div class="detalhe-largura-total"><dt>Sistema(s) envolvido(s)</dt>
@@ -430,7 +448,8 @@
             <h3>INFORMAÇÕES COMPLEMENTARES</h3>
             <dl>
               <div><dt>Indicadores definidos</dt><dd>Marque Sim quando o projeto já possuir indicadores e informe as métricas. Ao marcar Não, o campo poderá ser preenchido posteriormente na MAPRO.</dd></div>
-              <div><dt>Processo crítico</dt><dd>Informe se o projeto está relacionado a um processo considerado crítico para a operação.</dd></div>
+              <div><dt>Processo crítico</dt><dd>Impacta a receita, o cliente externo e a estratégia da empresa.</dd></div>
+              <div><dt>Iniciativa estratégica</dt><dd>Marque Sim quando o projeto fizer parte de uma iniciativa estratégica formal da empresa.</dd></div>
               <div><dt>Envolvimento de sistema</dt><dd>Marque Sim quando o projeto envolver algum sistema e informe qual ou quais sistemas serão impactados.</dd></div>
             </dl>
           </section>

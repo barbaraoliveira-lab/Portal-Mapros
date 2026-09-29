@@ -54,6 +54,13 @@
         <label>Status<select id="filtro-status"><option value="">Todos</option></select></label>
         <label>Área<select id="filtro-area"><option value="">Todas</option></select></label>
         <label>Nível do projeto<select id="filtro-nivel"><option value="">Todos</option></select></label>
+        <label>Iniciativa estratégica
+          <select id="filtro-iniciativa-estrategica">
+            <option value="">Todas</option>
+            <option value="SIM">Sim</option>
+            <option value="NÃO">Não</option>
+          </select>
+        </label>
         <label class="campo-filtro-lider-dashboard">Líder do projeto
           <div class="seletor-lider-dashboard">
             <input id="filtro-lider" type="search" placeholder="Pesquisar líder"
@@ -97,7 +104,7 @@
                 </section>
                 <section class="bloco-grafico-operacional-dashboard">
                   <div class="titulo-grafico-dashboard"><span>VISÃO OPERACIONAL</span><h2>MAPROS POR PORTFÓLIO</h2></div>
-                  <div id="grafico-portfolios" class="grafico-barras-dashboard"></div>
+                  <div id="grafico-portfolios" class="grafico-colunas-dashboard"></div>
                 </section>
               </article>
             </section>
@@ -164,7 +171,7 @@
                   aria-labelledby="titulo-minhas-atividades-dashboard">
                   <div class="cabecalho-detalhes-indicador-dashboard">
                     <div>
-                      <span>ATIVIDADES ATRIBUÍDAS AO USUÁRIO</span>
+                      <span id="rotulo-escopo-atividades-dashboard">ATIVIDADES ATRIBUÍDAS AO USUÁRIO</span>
                       <h2 id="titulo-minhas-atividades-dashboard">TODAS AS MINHAS ATIVIDADES</h2>
                     </div>
                     <button id="limpar-filtro-atividades-dashboard" type="button" hidden

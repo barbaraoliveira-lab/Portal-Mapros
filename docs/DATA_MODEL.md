@@ -112,12 +112,35 @@ A aba `MAPRO_HISTORICO_PRAZO` registra as mudanças do prazo final derivado da M
 A aba `MAPRO_NOTIFICACOES` mantém a chave de cada aviso enviado para impedir duplicação
 de e-mails na reexecução da rotina diária.
 
+## Caixa de saída de e-mails
+
+`MAPRO_EMAIL_OUTBOX` registra cada mensagem antes de sua entrega. A chave
+`CHAVE_IDEMPOTENCIA` impede que a repetição da mesma ação de negócio produza e-mails
+duplicados. Cada linha possui tipo, contexto, destinatário, conteúdo codificado em Base64,
+estado, número de tentativas, agendamento da próxima tentativa, datas de criação e envio e
+o último erro retornado pelo serviço.
+
+Os estados são `PENDENTE`, `PROCESSANDO`, `ENVIADO` e `FALHA`. Falhas temporárias são
+tentadas novamente após 5 minutos, 30 minutos, 2 horas, 12 horas e 24 horas, respeitando
+a cota diária disponível do `MailApp`. Depois da quinta tentativa, a mensagem permanece
+auditável como `FALHA` até o reprocessamento explícito de um administrador. Corpos de
+texto e HTML são codificados para preservar o conteúdo e impedir interpretação como
+fórmula da planilha.
+
+Cada destinatário ocupa uma linha própria. Assim, um endereço inválido ou uma falha
+individual não bloqueia as demais pessoas relacionadas ao mesmo evento.
+
 ## Participantes do projeto
 
 `MAPRO_PARTICIPANTES.PAPEL` aceita `LIDER`, `EDITOR`, `OBSERVADOR` e `ACESSO`.
 Participantes iniciais aprovados entram como `ACESSO`; somente vínculos explicitamente
 relacionados como editor ou observador podem ser responsáveis por atividades. O valor
 legado `PARTICIPANTE` é interpretado como `OBSERVADOR` para manter compatibilidade.
+Atividades já existentes continuam salváveis quando o responsável ativo foi gravado sob
+um vínculo legado `ACESSO`, desde que o responsável não seja alterado. Essa exceção não
+autoriza novas atribuições a vínculos `ACESSO`. Registros antigos sem departamento também
+podem ter os demais campos atualizados; quando disponível, o departamento é novamente
+derivado do cadastro ativo no servidor.
 
 As colunas `EVIDENCIA_ID`, `EVIDENCIA_NOME`, `EVIDENCIA_TIPO`, `EVIDENCIA_URL` e
 `EVIDENCIA_ENVIADA_POR`
@@ -151,20 +174,23 @@ conteúdo processado fica limitado a 2 MB no servidor.
 do cabeçalho solicitado: líder (ID, e-mail e departamento), Contagiro, nível, combinação
 de estratégia BSC, descrição, justificativa, resultados esperados, existência e conteúdo
 dos indicadores, classificação de processo crítico, envolvimento e nomes de sistemas e
-metadados da foto do líder. A migração flexível de cabeçalhos acrescenta as novas colunas
+participação em iniciativa estratégica, além dos metadados da foto do líder. A resposta
+fica em `INICIATIVA_ESTRATEGICA` tanto em `SOLICITACOES_MAPRO` quanto em `MAPROS`. A
+migração flexível de cabeçalhos acrescenta as novas colunas
 sem reposicionar os registros anteriores.
 
 O cadastro da solicitação é apresentado em quatro etapas. A passagem para a etapa seguinte
 exige o preenchimento dos campos da etapa atual, inclusive participantes, cadastro completo
-do líder e imagem. Na quarta etapa, as três perguntas Sim/Não são obrigatórias. Os campos
+do líder e imagem. Na quarta etapa, as quatro perguntas Sim/Não são obrigatórias. Os campos
 de indicadores e sistemas são exibidos e exigidos somente quando a resposta correspondente
 é `SIM`. O servidor repete as validações no envio final.
 
 Ao aprovar uma solicitação, o servidor copia esses dados para o registro correspondente
 em `MAPROS`, revalida o líder pelo ID e deriva novamente o departamento pelo cadastro
 vigente. `INDICADORES` é copiado quando já foi definido na solicitação; caso contrário,
-permanece vazio para preenchimento posterior na MAPRO. As respostas sobre processo crítico
-e sistemas também são copiadas. Datas de início e fim continuam derivadas das atividades.
+permanece vazio para preenchimento posterior na MAPRO. As respostas sobre processo crítico,
+iniciativa estratégica e sistemas também são copiadas. Datas de início e fim continuam
+derivadas das atividades.
 A foto já armazenada na
 pasta compartilhada é referenciada pela MAPRO sem criar uma cópia adicional.
 

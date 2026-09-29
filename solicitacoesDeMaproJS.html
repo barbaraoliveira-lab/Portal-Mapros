@@ -82,6 +82,7 @@
     document.getElementById('visualizar-solicitacao-admin').disabled = !possuiSelecao;
     document.getElementById('aprovar-solicitacao').disabled = status !== 'PENDENTE';
     document.getElementById('rejeitar-solicitacao').disabled = status !== 'PENDENTE';
+    document.getElementById('reenviar-emails-aprovacao').disabled = status !== 'APROVADA';
   }
 
   function preencherOpcoes() {
@@ -575,7 +576,8 @@
       'nomeProjeto', 'participantes', 'idLider', 'liderProjeto', 'departamento',
       'emailLider', 'negocio', 'dimensaoBsc', 'objetivoBsc', 'nivel', 'contagiro',
       'oQueE', 'porque', 'resultadosEsperados', 'possuiIndicadoresDefinidos',
-      'indicadores', 'processoCritico', 'envolveSistema', 'sistemasEnvolvidos',
+      'indicadores', 'processoCritico', 'iniciativaEstrategica',
+      'envolveSistema', 'sistemasEnvolvidos',
       'status', 'motivoRejeicao'
     ].forEach(function (campo) {
       preencherDetalheSolicitacaoAdmin(campo, item[campo]);
@@ -791,6 +793,7 @@
 
     const possuiIndicadores = obterValorRadioSolicitacao('possui-indicadores-solicitacao');
     const processoCritico = obterValorRadioSolicitacao('processo-critico-solicitacao');
+    const iniciativaEstrategica = obterValorRadioSolicitacao('iniciativa-estrategica-solicitacao');
     const envolveSistema = obterValorRadioSolicitacao('envolve-sistema-solicitacao');
     if (!possuiIndicadores) return invalidarEtapaSolicitacao(
       'Informe se o projeto já possui indicadores definidos.',
@@ -805,6 +808,10 @@
     if (!processoCritico) return invalidarEtapaSolicitacao(
       'Informe se é um processo crítico.',
       document.querySelector('input[name="processo-critico-solicitacao"]')
+    );
+    if (!iniciativaEstrategica) return invalidarEtapaSolicitacao(
+      'Informe se o projeto faz parte de uma iniciativa estratégica.',
+      document.querySelector('input[name="iniciativa-estrategica-solicitacao"]')
     );
     if (!envolveSistema) return invalidarEtapaSolicitacao(
       'Informe se o projeto envolverá algum sistema.',
@@ -899,6 +906,9 @@
     document.getElementById('solicitacao-indicadores').value =
       solicitacaoSelecionada.indicadores || '';
     selecionarRadioSolicitacao('processo-critico-solicitacao', solicitacaoSelecionada.processoCritico);
+    selecionarRadioSolicitacao(
+      'iniciativa-estrategica-solicitacao', solicitacaoSelecionada.iniciativaEstrategica
+    );
     selecionarRadioSolicitacao('envolve-sistema-solicitacao', solicitacaoSelecionada.envolveSistema);
     document.getElementById('solicitacao-sistemas').value =
       solicitacaoSelecionada.sistemasEnvolvidos || '';
@@ -946,6 +956,7 @@
       possuiIndicadoresDefinidos: obterValorRadioSolicitacao('possui-indicadores-solicitacao'),
       indicadores: document.getElementById('solicitacao-indicadores').value,
       processoCritico: obterValorRadioSolicitacao('processo-critico-solicitacao'),
+      iniciativaEstrategica: obterValorRadioSolicitacao('iniciativa-estrategica-solicitacao'),
       envolveSistema: obterValorRadioSolicitacao('envolve-sistema-solicitacao'),
       sistemasEnvolvidos: document.getElementById('solicitacao-sistemas').value,
       fotoLiderTipo: fotoLiderSolicitacaoTipo,
@@ -989,17 +1000,28 @@
     if (tipo === 'STATUS' && solicitacaoSelecionada.status !== 'PENDENTE') {
       return mostrarAviso('Somente solicitações pendentes podem ser aprovadas.', true);
     }
+    if (tipo === 'REENVIAR_APROVACAO' && solicitacaoSelecionada.status !== 'APROVADA') {
+      return mostrarAviso('Selecione uma solicitação aprovada para reenviar os e-mails.', true);
+    }
     acaoConfirmacao = { tipo: tipo, status: status || '' };
     const titulo = document.getElementById('titulo-confirmacao-mapro');
     const texto = document.getElementById('texto-confirmacao-mapro');
     titulo.textContent = tipo === 'EXCLUIR'
       ? 'EXCLUIR SOLICITAÇÃO'
-      : 'APROVAR SOLICITAÇÃO';
+      : (tipo === 'REENVIAR_APROVACAO'
+        ? 'REENVIAR E-MAILS DE APROVAÇÃO'
+        : 'APROVAR SOLICITAÇÃO');
     if (tipo === 'EXCLUIR') {
       MaproUI.renderConfirmationMessage(texto, [
         'Deseja realmente ',
         { emphasis: 'EXCLUIR' },
         ' a solicitação do projeto “',
+        { emphasis: solicitacaoSelecionada.nomeProjeto },
+        '”?'
+      ]);
+    } else if (tipo === 'REENVIAR_APROVACAO') {
+      MaproUI.renderConfirmationMessage(texto, [
+        'Deseja reenviar os e-mails de aprovação do projeto “',
         { emphasis: solicitacaoSelecionada.nomeProjeto },
         '”?'
       ]);
@@ -1105,13 +1127,17 @@
     if (acaoConfirmacao.tipo === 'EXCLUIR') {
       google.script.run.withSuccessHandler(sucesso).withFailureHandler(falha)
         .excluirSolicitacaoMapro(solicitacaoSelecionada.idSolicitacao);
+    } else if (acaoConfirmacao.tipo === 'REENVIAR_APROVACAO') {
+      const urlAtual = String(dadosPagina && dadosPagina.urlAplicacao || '');
+      google.script.run.withSuccessHandler(sucesso).withFailureHandler(falha)
+        .reenviarEmailsAprovacaoMapro(solicitacaoSelecionada.idSolicitacao, urlAtual);
     } else {
       const referencia = String(document.referrer || '');
       const urlServidor = String(dadosPagina && dadosPagina.urlAplicacao || '').match(
-        /https:\/\/script\.google\.com\/macros\/s\/[A-Za-z0-9_-]+\/exec/
+        /https:\/\/script\.google\.com\/(?:macros\/|a\/macros\/[^/]+\/)s\/[A-Za-z0-9_-]+\/exec/
       );
       const urlReferencia = referencia.match(
-        /https:\/\/script\.google\.com\/macros\/s\/[A-Za-z0-9_-]+\/exec/
+        /https:\/\/script\.google\.com\/(?:macros\/|a\/macros\/[^/]+\/)s\/[A-Za-z0-9_-]+\/exec/
       );
       const urlWebAppAtual = urlServidor
         ? urlServidor[0]
@@ -1146,6 +1172,24 @@
     mostrarAviso('Filtros removidos.');
   }
 
+  function reprocessarFilaEmails() {
+    const botao = document.getElementById('reprocessar-fila-emails');
+    botao.disabled = true;
+    MaproUI.showLoading('Reprocessando e-mails pendentes...');
+    google.script.run
+      .withSuccessHandler(function (resposta) {
+        botao.disabled = false;
+        MaproUI.hideLoading();
+        mostrarAviso(resposta.mensagem, !resposta.sucesso);
+      })
+      .withFailureHandler(function () {
+        botao.disabled = false;
+        MaproUI.hideLoading();
+        mostrarAviso('Falha ao reprocessar a fila de e-mails.', true);
+      })
+      .reprocessarFilaEmailsMapro();
+  }
+
   function voltarInicio() {
     if (dadosPagina && dadosPagina.urlAplicacao) {
       MaproUI.navigate(dadosPagina.urlAplicacao, 'Voltando ao início...');
@@ -1168,6 +1212,11 @@
   document.getElementById('rejeitar-solicitacao').addEventListener('click', function () {
     abrirRejeicao();
   });
+  document.getElementById('reenviar-emails-aprovacao').addEventListener('click', function () {
+    abrirConfirmacao('REENVIAR_APROVACAO');
+  });
+  document.getElementById('reprocessar-fila-emails')
+    .addEventListener('click', reprocessarFilaEmails);
   document.getElementById('abrir-filtros').addEventListener('click', function () {
     abrirModal('modal-filtros-mapro');
   });

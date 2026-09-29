@@ -530,9 +530,19 @@
   .grade-complementos-mapro {
     display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; margin-top: 6px;
   }
+  .cartao-perguntas-estrategicas-mapro {
+    min-width: 0; overflow: hidden; border: 1px solid #c9cad2;
+    border-radius: 7px; background: #f7f7f9;
+  }
   .pergunta-complementar-mapro {
     min-width: 0; margin: 0; padding: 8px 10px; border: 1px solid #c9cad2;
     border-radius: 7px; background: #f7f7f9;
+  }
+  .pergunta-complementar-mapro.pergunta-interna-mapro {
+    border: 0; border-radius: 0; background: transparent;
+  }
+  .pergunta-complementar-mapro.pergunta-interna-mapro + .pergunta-interna-mapro {
+    border-top: 1px solid #c9cad2;
   }
   .pergunta-complementar-mapro legend {
     padding: 0 5px; color: #06063d; font-size: .69rem; font-weight: 900;
@@ -590,7 +600,7 @@
   #tabela-atividades-container {
     width: 100%; max-width: 100%; min-width: 0; max-height: none;
     overflow-x: auto; overflow-y: visible; border-radius: 0; box-shadow: none;
-    overscroll-behavior-inline: contain;
+    overflow-anchor: none; overscroll-behavior-inline: contain;
   }
   .titulo-corpo-projeto {
     position: sticky; top: 0; z-index: 17; display: flex; min-height: 32px;
@@ -715,6 +725,14 @@
     box-shadow: 0 5px 12px rgba(3,4,65,.18); pointer-events: none;
   }
   .cabecalho-fixo-atividades-mapro[hidden] { display: none; }
+  .rolagem-horizontal-fixa-mapro {
+    position: fixed; z-index: 24; bottom: 0; height: 18px; overflow-x: auto;
+    overflow-y: hidden; border: 1px solid #c9cad2; border-bottom: 0;
+    border-radius: 7px 7px 0 0; background: #fff;
+    box-shadow: 0 -4px 12px rgba(3,4,65,.16); overscroll-behavior-inline: contain;
+  }
+  .rolagem-horizontal-fixa-mapro[hidden] { display: none; }
+  .rolagem-horizontal-fixa-mapro > div { height: 1px; }
   .tabela-cabecalho-fixo-atividades-mapro {
     width: auto; min-width: 0; margin: 0; table-layout: fixed;
   }
@@ -987,7 +1005,7 @@
     }
     .tabela-atividades-mapro td::before {
       content: attr(data-label); margin-bottom: 3px; color: #68697a;
-      font-size: .58rem; font-weight: 900; text-transform: uppercase;
+      font-size: .75rem; font-weight: 900; text-transform: uppercase;
     }
     .tabela-atividades-mapro td:nth-child(1), .tabela-atividades-mapro td:nth-child(2) {
       display: flex; align-items: center; min-height: 34px;
@@ -1017,8 +1035,18 @@
     .resumo-executivo-mapro { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .card-progresso-mapro { grid-column: 1 / -1; }
     .conteudo-detalhe-mapro { padding: 3px 2px; }
-    .titulo-corpo-projeto { min-height: 92px; }
+    .titulo-corpo-projeto { min-height: 142px; padding-bottom: 106px; }
     .botao-iniciar-acompanhamento { font-size: .62rem; }
+    .botao-informacao-corpo-projeto-mapro,
+    .botao-criar-topico,
+    .botao-editar-atividades,
+    .botao-desfazer-atividade,
+    .botao-salvar-prazos,
+    .botao-iniciar-acompanhamento,
+    .botao-adicionar-linha,
+    .botao-cancelar-linha,
+    .botao-excluir-linha,
+    .botao-mover-linha { min-width: 44px; min-height: 44px; }
     .rodape-mapros { flex-wrap: wrap; }
     .conteudo-rodape-mapros { flex-wrap: wrap; gap: 5px 8px; margin-left: auto; }
   }
@@ -1048,6 +1076,110 @@
     .linha-prazos label:nth-child(2) { grid-template-columns: 102px minmax(0, 1fr); }
     .campo-semana { grid-template-columns: 102px minmax(0, 1fr) 28px; }
     .rotulo-semana { justify-content: flex-start; color: #06063d; background: #fff; border-right: 1px solid #c9cad2; }
+  }
+
+  body.imprimindo-projeto-mapro {
+    margin: 0; padding: 0; color: #06063d; background: #fff;
+    font-family: Arial, Helvetica, sans-serif;
+  }
+  body.imprimindo-projeto-mapro .relatorio-projeto-mapro {
+    display: block; width: 100%; color: #06063d; background: #fff;
+    font-size: 9pt; line-height: 1.35;
+  }
+  .cabecalho-relatorio-mapro {
+    display: grid; grid-template-columns: 205px minmax(0, 1fr); min-height: 92px;
+    color: #fff; background: #06063d; border-radius: 12px; overflow: hidden;
+    break-inside: avoid; page-break-inside: avoid;
+  }
+  .marca-relatorio-mapro {
+    display: flex; flex-direction: column; justify-content: center; gap: 3px;
+    padding: 12px 20px; border-right: 4px solid #ef2658; background: #06063d;
+  }
+  .logo-relatorio-mapro {
+    display: block; width: 32px; height: 32px; margin: 0 0 2px;
+    object-fit: contain; object-position: left center;
+  }
+  .marca-relatorio-mapro strong { font-size: 11pt; letter-spacing: .04em; }
+  .marca-relatorio-mapro small { color: #dfe7ff; font-size: 8pt; }
+  .identificacao-relatorio-mapro { display: flex; flex-direction: column; justify-content: center; padding: 14px 22px; }
+  .identificacao-relatorio-mapro h1 { margin: 0 0 5px; color: #fff; font-size: 19pt; line-height: 1.15; }
+  .identificacao-relatorio-mapro p { margin: 0 0 5px; color: #fff; font-size: 10pt; font-weight: 700; }
+  .identificacao-relatorio-mapro small { color: #dfe7ff; }
+  .indicadores-relatorio-mapro {
+    display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 7px;
+    margin: 8px 0; break-inside: avoid; page-break-inside: avoid;
+  }
+  .indicador-relatorio-mapro {
+    display: flex; min-height: 50px; flex-direction: column; justify-content: center;
+    padding: 8px 12px; border: 1px solid #d9dce8; border-radius: 9px; background: #f7f8fc;
+  }
+  .indicador-relatorio-mapro span {
+    color: #676b80; font-size: 7.5pt; font-weight: 800; text-transform: uppercase;
+  }
+  .indicador-relatorio-mapro strong { margin-top: 2px; color: #06063d; font-size: 17pt; line-height: 1; }
+  .secao-relatorio-mapro {
+    margin: 8px 0 0; border: 1px solid #d9dce8; border-radius: 9px; overflow: hidden;
+    break-inside: avoid; page-break-inside: avoid;
+  }
+  .secao-relatorio-mapro > h2 {
+    margin: 0; padding: 7px 11px; color: #fff; background: #06063d;
+    font-size: 8.5pt; letter-spacing: .04em;
+  }
+  .grade-campos-relatorio-mapro {
+    display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 0;
+  }
+  .campo-relatorio-mapro {
+    min-width: 0; padding: 7px 9px; border-right: 1px solid #e1e3ec;
+    border-bottom: 1px solid #e1e3ec; background: #fff;
+  }
+  .campo-relatorio-mapro dt {
+    margin: 0 0 2px; color: #6b6f82; font-size: 7pt; font-weight: 800; text-transform: uppercase;
+  }
+  .campo-relatorio-mapro dd {
+    margin: 0; color: #06063d; font-size: 8.5pt; font-weight: 600;
+    white-space: pre-wrap; overflow-wrap: anywhere;
+  }
+  .largura-2-relatorio-mapro { grid-column: span 2; }
+  .largura-total-relatorio-mapro { grid-column: 1 / -1; }
+  .secao-atividades-relatorio-mapro {
+    break-inside: auto; page-break-inside: auto;
+  }
+  .tabela-relatorio-mapro {
+    width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 8pt;
+  }
+  .tabela-relatorio-mapro thead { display: table-header-group; }
+  .tabela-relatorio-mapro tr { break-inside: avoid; page-break-inside: avoid; }
+  .tabela-relatorio-mapro th {
+    padding: 6px 4px; border: 1px solid #20205a; color: #fff; background: #06063d;
+    font-size: 7pt; line-height: 1.1; text-transform: uppercase;
+  }
+  .tabela-relatorio-mapro td {
+    padding: 5px 4px; border: 1px solid #d2d5df; color: #06063d; background: #fff;
+    vertical-align: top; overflow-wrap: anywhere;
+  }
+  .tabela-relatorio-mapro .status-relatorio-mapro {
+    text-align: center; vertical-align: middle;
+  }
+  .tabela-relatorio-mapro .status-relatorio-mapro .bolinha-status {
+    display: inline-block; width: 12px; height: 12px; margin: 0 auto;
+  }
+  .tabela-relatorio-mapro tbody tr:nth-child(even) td { background: #f4f5f8; }
+  .tabela-relatorio-mapro .linha-topico-relatorio-mapro td { background: #e9eaf2; font-weight: 800; }
+  .tabela-relatorio-mapro th:nth-child(1) { width: 4%; }
+  .tabela-relatorio-mapro th:nth-child(2) { width: 24%; text-align: left; }
+  .tabela-relatorio-mapro th:nth-child(3) { width: 14%; }
+  .tabela-relatorio-mapro th:nth-child(4) { width: 10%; }
+  .tabela-relatorio-mapro th:nth-child(5),
+  .tabela-relatorio-mapro th:nth-child(7) { width: 8%; }
+  .tabela-relatorio-mapro th:nth-child(6),
+  .tabela-relatorio-mapro th:nth-child(8) { width: 7%; }
+  .tabela-relatorio-mapro th:nth-child(9) { width: 9%; }
+  .tabela-relatorio-mapro th:nth-child(10) { width: 9%; }
+  .estado-vazio-relatorio-mapro { padding: 18px !important; text-align: center; }
+  .rodape-relatorio-mapro {
+    margin-top: 9px; padding: 8px 12px; color: #fff; background: #06063d;
+    border-radius: 8px; text-align: center; font-size: 8pt; font-weight: 800;
+    break-inside: avoid; page-break-inside: avoid;
   }
 
   @media print {
@@ -1143,7 +1275,7 @@
   }
 
   @media (max-width: 480px) {
-    .titulo-corpo-projeto { min-height: 96px; }
+    .titulo-corpo-projeto { min-height: 142px; }
     .painel-estrategia-imagem { grid-template-columns: 1fr; }
   }
 

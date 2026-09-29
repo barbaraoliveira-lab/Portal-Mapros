@@ -2,7 +2,7 @@ const CONFIG = {
   nomeSistema: 'MAPRO',
   emailAdministrador: 'sgi@integrajca.com.br',
   corPrincipal: '#030441',
-  versaoEstrutura: '2026-09-11-02',
+  versaoEstrutura: '2026-09-22-01',
   logoCarregamentoId: '1xu3olDb4OIgL2QzIKreygYr-J_oC3cv3',
   logoId: '1KZzCBGZF8UV4s-Lk9XG9GzkHUuOh5UfN',
   logoEmpresaId: '1lh2A0JeKyfEmf3rDfJvLy32FLcInxza5',
@@ -17,10 +17,15 @@ const CONFIG = {
   abaMaproHistoricoDatas: 'MAPRO_HISTORICO_DATAS',
   abaMaproHistoricoPrazo: 'MAPRO_HISTORICO_PRAZO',
   abaMaproNotificacoes: 'MAPRO_NOTIFICACOES',
+  abaFilaEmails: 'MAPRO_EMAIL_OUTBOX',
+  maxTentativasEmail: 5,
+  loteEmails: 25,
+  atrasosRetentativaEmailMinutos: [5, 30, 120, 720, 1440],
   propriedadePastaEvidencias: 'MAPRO_EVIDENCIAS_FOLDER_ID',
   propriedadePastaFotosLideres: 'MAPRO_FOTOS_LIDERES_FOLDER_ID',
   pastaFotosLideresId: '1vYsmnpRNHpwAkvN-2FW6-nqlgbP78cqt',
   propriedadeUrlWebApp: 'MAPRO_WEB_APP_URL',
+  urlWebAppPublica: 'https://script.google.com/a/macros/integrajca.com.br/s/AKfycbw7ai2ZlUljqSmRzk9_fNZLr5QS-1Eyqg4rMuZWKi5y7XXrvsI-ETlf51_8fIsWFRb3jw/exec',
   pastaEvidenciasId: '14Y8kQVR0sLu73uGXwp3yvlrh6ZwbMDPq',
   abaBaseContagiro: 'BASE_CONTAGIRO',
   abaBaseDepartamentos: 'BASE_DEPARTAMENTOS',
@@ -45,7 +50,8 @@ const CABECALHOS_SOLICITACOES_MAPRO = [
   'ID_LÍDER', 'EMAIL_LÍDER', 'DEPARTAMENTO', 'CONTAGIRO', 'NIVEL',
   'NEGOCIO', 'DIMENSAO_BSC', 'OBJETIVO_BSC', 'O_QUE_E', 'PORQUE',
   'RESULTADOS_ESPERADOS', 'POSSUI_INDICADORES_DEFINIDOS', 'INDICADORES',
-  'PROCESSO_CRITICO', 'ENVOLVE_SISTEMA', 'SISTEMAS_ENVOLVIDOS',
+  'PROCESSO_CRITICO', 'INICIATIVA_ESTRATEGICA', 'ENVOLVE_SISTEMA',
+  'SISTEMAS_ENVOLVIDOS',
   'FOTO_LIDER_ID', 'FOTO_LIDER_TIPO',
   'FOTO_LIDER_ATUALIZADA_EM', 'FOTO_LIDER_ATUALIZADA_POR'
 ];
@@ -57,8 +63,8 @@ const CABECALHOS_MAPROS = [
   'PRAZO_PREENCHIMENTO', 'CRIADO_EM', 'ATUALIZADO_EM', 'O_QUE_E', 'PORQUE',
   'RESULTADOS_ESPERADOS', 'CONTAGIRO', 'NIVEL', 'DATA_INICIO', 'DATA_FINAL',
   'DEPARTAMENTO', 'NEGOCIO', 'DIMENSAO_BSC', 'OBJETIVO_BSC', 'INDICADORES',
-  'POSSUI_INDICADORES_DEFINIDOS', 'PROCESSO_CRITICO', 'ENVOLVE_SISTEMA',
-  'SISTEMAS_ENVOLVIDOS',
+  'POSSUI_INDICADORES_DEFINIDOS', 'PROCESSO_CRITICO', 'INICIATIVA_ESTRATEGICA',
+  'ENVOLVE_SISTEMA', 'SISTEMAS_ENVOLVIDOS',
   'INICIADA_EM', 'INICIADA_POR', 'MOTIVO_CANCELAMENTO', 'VERSION',
   'ACOMPANHAMENTO_INICIADO_EM', 'ACOMPANHAMENTO_INICIADO_POR',
   'CONCLUIDA_EM',
@@ -156,7 +162,10 @@ function incluir(nomeArquivo) {
  */
 function configurarBancoDeDados() {
   exigirAdministradorConfiguracao_();
-  return configurarBancoDeDados_();
+  const resultado = configurarBancoDeDados_();
+  configurarGatilhoNotificacoesMapro_();
+  configurarGatilhoFilaEmailsMapro_();
+  return resultado;
 }
 
 /** Mantém a rotina de migração inacessível ao cliente do Web App. */
@@ -204,6 +213,7 @@ function configurarBancoDeDados_() {
   normalizarPerfisEStatus_(abaUsuarios);
   sincronizarMaprosAprovadas_(abaSolicitacoesMapro, abaMapros, abaUsuarios);
   configurarEstruturaMapros_(planilha, abaMapros, abaUsuarios);
+  configurarEstruturaEmailsMapro_(planilha);
 
   formatarAba_(abaUsuarios, CABECALHOS_USUARIOS.length);
   formatarAba_(
@@ -444,6 +454,16 @@ function carregarPaginaSolicitacoesMapro() {
   try {
     garantirBancoConfigurado_();
     const usuario = exigirUsuarioAtivo_();
+    if (String(usuario.NIVEL || '').toUpperCase() === 'ADMIN') {
+      try {
+        configurarGatilhoFilaEmailsMapro_();
+      } catch (erroGatilhoEmail) {
+        console.error(JSON.stringify({
+          acao: 'FALHA_CONFIGURACAO_GATILHO_FILA_EMAILS',
+          erro: erroGatilhoEmail && erroGatilhoEmail.message
+        }));
+      }
+    }
     const usuariosAtivos = lerRegistros_(obterAbaUsuarios_(), CABECALHOS_USUARIOS)
       .filter(function (item) { return String(item.STATUS).toUpperCase() === 'ATIVO'; })
       .map(function (item) {
@@ -622,7 +642,7 @@ function salvarSolicitacaoMapro(dados) {
     }));
     if (!linhaExistente) {
       bloqueio.releaseLock();
-      enviarAvisoNovaSolicitacaoMaproSgi_(usuario.NOME);
+      enviarAvisoNovaSolicitacaoMaproSgi_(usuario.NOME, idPersistido);
     }
     return {
       sucesso: true,
@@ -640,7 +660,7 @@ function salvarSolicitacaoMapro(dados) {
 }
 
 /** Avisa exclusivamente o SGI quando uma nova solicitação de Mapro é registrada. */
-function enviarAvisoNovaSolicitacaoMaproSgi_(nomeSolicitante) {
+function enviarAvisoNovaSolicitacaoMaproSgi_(nomeSolicitante, idSolicitacao) {
   const destinatario = normalizarEmail_(CONFIG.emailAdministrador);
   if (!destinatario) {
     console.error(JSON.stringify({acao: 'FALHA_AVISO_NOVA_SOLICITACAO_MAPRO', erro: 'DESTINATARIO_NAO_CONFIGURADO'}));
@@ -648,20 +668,29 @@ function enviarAvisoNovaSolicitacaoMaproSgi_(nomeSolicitante) {
   }
   try {
     const urlSolicitacoes = obterUrlPublicaAplicacao_() + '?pagina=solicitacoesDeMapro';
-    MailApp.sendEmail({
+    const resultado = entregarEmailMapro_({
       to: destinatario,
       subject: 'NOVA SOLICITAÇÃO DE MAPRO',
       body: 'Olá, SGI!\n\nUma nova solicitação de Mapro foi recebida e está aguardando análise.\n\n' +
         'Solicitante: ' + String(nomeSolicitante || 'Não identificado') +
         '\n\nAnalisar solicitação: ' + urlSolicitacoes + '\n\nCORPORATIVO | P&G | SGI',
       htmlBody: montarEmailNovaSolicitacaoMaproSgiHtml_(nomeSolicitante, urlSolicitacoes),
-      name: 'SGI MAPRO'
+      name: 'SGI MAPRO',
+      tipo: 'NOVA_SOLICITACAO_MAPRO',
+      contextoId: formatarId_(Number(idSolicitacao)),
+      chaveIdempotencia: 'NOVA_SOLICITACAO_MAPRO:' +
+        formatarId_(Number(idSolicitacao)) + ':' + destinatario
     });
     console.info(JSON.stringify({
-      acao: 'AVISO_NOVA_SOLICITACAO_MAPRO_ENVIADO',
-      destinatario: destinatario
+      acao: resultado.enviado
+        ? 'AVISO_NOVA_SOLICITACAO_MAPRO_ENVIADO'
+        : (resultado.enfileirado
+          ? 'AVISO_NOVA_SOLICITACAO_MAPRO_ENFILEIRADO'
+          : 'FALHA_AVISO_NOVA_SOLICITACAO_MAPRO'),
+      destinatario: destinatario,
+      emailId: resultado.idEmail || ''
     }));
-    return true;
+    return Boolean(resultado.enfileirado);
   } catch (erro) {
     console.error(JSON.stringify({
       acao: 'FALHA_AVISO_NOVA_SOLICITACAO_MAPRO',
@@ -773,6 +802,9 @@ function atualizarStatusSolicitacaoMapro(idSolicitacao, novoStatus, motivoRejeic
     if (statusAtual !== 'PENDENTE') {
       throw new Error('Somente solicitações pendentes podem ser aprovadas ou rejeitadas.');
     }
+    const urlPublicaAprovacao = status === 'APROVADA'
+      ? obterUrlPublicaAplicacao_()
+      : '';
     const motivo = status === 'REJEITADA'
       ? validarMotivoRejeicao_(motivoRejeicao)
       : '';
@@ -805,7 +837,7 @@ function atualizarStatusSolicitacaoMapro(idSolicitacao, novoStatus, motivoRejeic
 
     let resultadoEmails = null;
     if (status === 'APROVADA') {
-      resultadoEmails = enviarEmailsAprovacaoMapro_(registro, agora);
+      resultadoEmails = enviarEmailsAprovacaoMapro_(registro, agora, urlPublicaAprovacao);
     } else {
       resultadoEmails = enviarEmailsRejeicaoMapro_(registro, motivo);
     }
@@ -819,6 +851,47 @@ function atualizarStatusSolicitacaoMapro(idSolicitacao, novoStatus, motivoRejeic
     return respostaDeErro_(erro);
   } finally {
     if (bloqueio.hasLock()) bloqueio.releaseLock();
+  }
+}
+
+/** Reenvia, sob solicitação do administrador, os e-mails de uma MAPRO já aprovada. */
+function reenviarEmailsAprovacaoMapro(idSolicitacao, urlWebAppAtual) {
+  try {
+    garantirBancoConfigurado_();
+    const administrador = exigirAdministrador_();
+    registrarUrlPublicaAplicacao_(urlWebAppAtual);
+    const urlPublica = obterUrlPublicaAplicacao_();
+    const aba = obterAbaSolicitacoesMapro_();
+    const linha = buscarLinhaSolicitacaoMapro_(aba, idSolicitacao);
+    if (!linha) throw new Error('A solicitação selecionada não foi encontrada.');
+    const registro = lerRegistroDaLinha_(aba, linha, CABECALHOS_SOLICITACOES_MAPRO);
+    if (String(registro['STATUS_SOLICITAÇÃO'] || '').toUpperCase() !== 'APROVADA') {
+      throw new Error('Somente solicitações aprovadas podem ter os e-mails reenviados.');
+    }
+    const dataRegistrada = new Date(registro.ATUALIZADO_EM || new Date());
+    const dataAprovacao = Number.isNaN(dataRegistrada.getTime())
+      ? new Date()
+      : dataRegistrada;
+    const resultado = enviarEmailsAprovacaoMapro_(
+      registro,
+      dataAprovacao,
+      urlPublica,
+      {forcarNovo: true}
+    );
+    console.info(JSON.stringify({
+      acao: 'EMAILS_APROVACAO_MAPRO_REENVIADOS',
+      solicitacaoId: String(idSolicitacao),
+      realizadoPor: administrador.EMAIL,
+      enviados: resultado.enviados,
+      falhas: resultado.falhas.length,
+      naoEncontrados: resultado.naoEncontrados.length
+    }));
+    return {
+      sucesso: true,
+      mensagem: montarMensagemResultadoReenvioAprovacao_(resultado)
+    };
+  } catch (erro) {
+    return respostaDeErro_(erro);
   }
 }
 
@@ -850,7 +923,8 @@ function solicitarAcesso() {
     const agora = new Date();
     aba.appendRow([protocolo, email, 'PENDENTE', agora.toISOString()]);
 
-    MailApp.sendEmail({
+    bloqueio.releaseLock();
+    const resultadoEmail = entregarEmailMapro_({
       to: CONFIG.emailAdministrador,
       subject: '[MAPRO] Nova solicitação de acesso',
       body: [
@@ -861,10 +935,22 @@ function solicitarAcesso() {
         'Protocolo: ' + protocolo
       ].join('\n'),
       htmlBody: montarEmailSolicitacaoAcessoHtml_(email, agora, protocolo),
-      name: CONFIG.nomeSistema
+      name: CONFIG.nomeSistema,
+      tipo: 'SOLICITACAO_ACESSO',
+      contextoId: protocolo,
+      chaveIdempotencia: 'SOLICITACAO_ACESSO:' + protocolo + ':' +
+        normalizarEmail_(CONFIG.emailAdministrador)
     });
 
-    return { sucesso: true, mensagem: 'Solicitação enviada ao SGI com sucesso.' };
+    return {
+      sucesso: true,
+      mensagem: resultadoEmail.enviado
+        ? 'Solicitação enviada ao SGI com sucesso.'
+        : (resultadoEmail.enfileirado
+          ? 'Solicitação registrada. O aviso ao SGI está na fila de envio automático.'
+          : 'Solicitação registrada, mas o aviso ao SGI não pôde ser preparado. ' +
+            'O administrador ainda poderá consultá-la no portal.')
+    };
   } catch (erro) {
     return respostaDeErro_(erro);
   } finally {
@@ -1438,6 +1524,7 @@ function validarDadosSolicitacaoMapro_(dados) {
       .trim().toUpperCase(),
     indicadores: String(entrada.indicadores || '').trim(),
     processoCritico: String(entrada.processoCritico || '').trim().toUpperCase(),
+    iniciativaEstrategica: String(entrada.iniciativaEstrategica || '').trim().toUpperCase(),
     envolveSistema: String(entrada.envolveSistema || '').trim().toUpperCase(),
     sistemasEnvolvidos: String(entrada.sistemasEnvolvidos || '').trim(),
     fotoLiderTipo: String(entrada.fotoLiderTipo || '').trim().toLowerCase(),
@@ -1477,6 +1564,10 @@ function validarDadosSolicitacaoMapro_(dados) {
   validarRespostaSimNaoSolicitacaoMapro_(
     solicitacao.processoCritico,
     'Informe se é um processo crítico.'
+  );
+  validarRespostaSimNaoSolicitacaoMapro_(
+    solicitacao.iniciativaEstrategica,
+    'Informe se o projeto faz parte de uma iniciativa estratégica.'
   );
   validarRespostaSimNaoSolicitacaoMapro_(
     solicitacao.envolveSistema,
@@ -1570,6 +1661,7 @@ function montarLinhaSolicitacaoMapro_(
     POSSUI_INDICADORES_DEFINIDOS: entrada.possuiIndicadoresDefinidos,
     INDICADORES: protegerTextoPlanilha_(entrada.indicadores),
     PROCESSO_CRITICO: entrada.processoCritico,
+    INICIATIVA_ESTRATEGICA: entrada.iniciativaEstrategica,
     ENVOLVE_SISTEMA: entrada.envolveSistema,
     SISTEMAS_ENVOLVIDOS: protegerTextoPlanilha_(entrada.sistemasEnvolvidos),
     FOTO_LIDER_ID: String(estado.FOTO_LIDER_ID || ''),
@@ -1629,6 +1721,7 @@ function mapearSolicitacaoMaproParaCliente_(item) {
     possuiIndicadoresDefinidos: String(item.POSSUI_INDICADORES_DEFINIDOS || ''),
     indicadores: String(item.INDICADORES || ''),
     processoCritico: String(item.PROCESSO_CRITICO || ''),
+    iniciativaEstrategica: String(item.INICIATIVA_ESTRATEGICA || ''),
     envolveSistema: String(item.ENVOLVE_SISTEMA || ''),
     sistemasEnvolvidos: String(item.SISTEMAS_ENVOLVIDOS || ''),
     possuiFotoLider: Boolean(item.FOTO_LIDER_ID)
@@ -1756,6 +1849,7 @@ function montarLinhaMaproAprovada_(solicitacao, usuarios) {
     INDICADORES: protegerTextoPlanilha_(solicitacao.INDICADORES),
     POSSUI_INDICADORES_DEFINIDOS: String(solicitacao.POSSUI_INDICADORES_DEFINIDOS || ''),
     PROCESSO_CRITICO: String(solicitacao.PROCESSO_CRITICO || ''),
+    INICIATIVA_ESTRATEGICA: String(solicitacao.INICIATIVA_ESTRATEGICA || ''),
     ENVOLVE_SISTEMA: String(solicitacao.ENVOLVE_SISTEMA || ''),
     SISTEMAS_ENVOLVIDOS: protegerTextoPlanilha_(solicitacao.SISTEMAS_ENVOLVIDOS),
     VERSION: 1,
@@ -1811,38 +1905,41 @@ function mapearMaproParaCliente_(mapro) {
   };
 }
 
-function enviarEmailsAprovacaoMapro_(solicitacao, dataAprovacao) {
+function enviarEmailsAprovacaoMapro_(solicitacao, dataAprovacao, urlPublica, opcoes) {
   solicitacao.NOME_PROJETO = normalizarNomeProjeto_(solicitacao.NOME_PROJETO);
   const dadosDestinatarios = obterDestinatariosSolicitacaoMapro_(solicitacao);
   const destinatarios = dadosDestinatarios.destinatarios;
   const naoEncontrados = dadosDestinatarios.naoEncontrados;
   const prazo = new Date(dataAprovacao.getTime() + (15 * 24 * 60 * 60 * 1000));
+  const urlProjeto = montarUrlProjetoMapro_(
+    formatarIdSolicitacaoEmail_(solicitacao),
+    urlPublica
+  );
   const falhas = [];
+  const pendentes = [];
   let enviados = 0;
   Object.keys(destinatarios).forEach(function (email) {
     const destinatario = destinatarios[email];
-    const urlProjeto = montarUrlProjetoMapro_(formatarIdSolicitacaoEmail_(solicitacao));
-    try {
-      MailApp.sendEmail({
-        to: email,
-        subject: 'NOVA MAPRO - ' + String(solicitacao.NOME_PROJETO),
-        body: montarEmailAprovacaoTexto_(destinatario, solicitacao, prazo, urlProjeto),
-        htmlBody: montarEmailAprovacaoHtml_(destinatario, solicitacao, prazo, urlProjeto),
-        name: 'SGI MAPRO'
-      });
-      enviados += 1;
-    } catch (erro) {
-      falhas.push(email);
-      console.error(JSON.stringify({
-        acao: 'FALHA_EMAIL_APROVACAO_MAPRO',
-        email: email,
-        erro: erro && erro.message
-      }));
-    }
+    const idSolicitacao = formatarIdSolicitacaoEmail_(solicitacao);
+    const resultado = entregarEmailMapro_({
+      to: email,
+      subject: 'NOVA MAPRO - ' + String(solicitacao.NOME_PROJETO),
+      body: montarEmailAprovacaoTexto_(destinatario, solicitacao, prazo, urlProjeto),
+      htmlBody: montarEmailAprovacaoHtml_(destinatario, solicitacao, prazo, urlProjeto),
+      name: 'SGI MAPRO',
+      tipo: 'APROVACAO_MAPRO',
+      contextoId: idSolicitacao,
+      chaveIdempotencia: 'APROVACAO_MAPRO:' + idSolicitacao + ':' + email,
+      forcarNovo: Boolean(opcoes && opcoes.forcarNovo)
+    });
+    if (resultado.enviado) enviados += 1;
+    else if (resultado.enfileirado) pendentes.push(email);
+    else falhas.push(email);
   });
 
   return {
     enviados: enviados,
+    pendentes: pendentes,
     falhas: falhas,
     naoEncontrados: naoEncontrados
   };
@@ -1853,29 +1950,28 @@ function enviarEmailsRejeicaoMapro_(solicitacao, motivo) {
   const dadosDestinatarios = obterDestinatariosSolicitacaoMapro_(solicitacao);
   const destinatarios = dadosDestinatarios.destinatarios;
   const falhas = [];
+  const pendentes = [];
   let enviados = 0;
   Object.keys(destinatarios).forEach(function (email) {
     const destinatario = destinatarios[email];
-    try {
-      MailApp.sendEmail({
-        to: email,
-        subject: 'MAPRO REJEITADA - ' + String(solicitacao.NOME_PROJETO),
-        body: montarEmailRejeicaoTexto_(destinatario, solicitacao, motivo),
-        htmlBody: montarEmailRejeicaoHtml_(destinatario, solicitacao, motivo),
-        name: 'SGI MAPRO'
-      });
-      enviados += 1;
-    } catch (erro) {
-      falhas.push(email);
-      console.error(JSON.stringify({
-        acao: 'FALHA_EMAIL_REJEICAO_MAPRO',
-        email: email,
-        erro: erro && erro.message
-      }));
-    }
+    const idSolicitacao = formatarIdSolicitacaoEmail_(solicitacao);
+    const resultado = entregarEmailMapro_({
+      to: email,
+      subject: 'MAPRO REJEITADA - ' + String(solicitacao.NOME_PROJETO),
+      body: montarEmailRejeicaoTexto_(destinatario, solicitacao, motivo),
+      htmlBody: montarEmailRejeicaoHtml_(destinatario, solicitacao, motivo),
+      name: 'SGI MAPRO',
+      tipo: 'REJEICAO_MAPRO',
+      contextoId: idSolicitacao,
+      chaveIdempotencia: 'REJEICAO_MAPRO:' + idSolicitacao + ':' + email
+    });
+    if (resultado.enviado) enviados += 1;
+    else if (resultado.enfileirado) pendentes.push(email);
+    else falhas.push(email);
   });
   return {
     enviados: enviados,
+    pendentes: pendentes,
     falhas: falhas,
     naoEncontrados: dadosDestinatarios.naoEncontrados
   };
@@ -1957,57 +2053,88 @@ function normalizarNomeProjeto_(valor) {
 }
 
 /** Gera um acesso direto pela implantação pública estável do Web App. */
-function montarUrlProjetoMapro_(idMapro) {
+function montarUrlProjetoMapro_(idMapro, urlPublica) {
   const parametros = [
     'pagina=mapros',
     'mapro=' + encodeURIComponent(String(idMapro || '').trim())
   ];
-  return obterUrlPublicaAplicacao_() + '?' + parametros.join('&');
+  const base = String(urlPublica || '').trim().replace(/\/+$/, '');
+  if (base && !urlPublicaValidaMapro_(base)) {
+    throw new Error('A URL pública do Web App é inválida.');
+  }
+  return (base || obterUrlPublicaAplicacao_()) + '?' + parametros.join('&');
 }
 
 function registrarUrlPublicaAplicacao_(urlInformada) {
   const url = String(urlInformada || '').trim().replace(/\/+$/, '');
-  if (!/^https:\/\/script\.google\.com\/macros\/s\/[A-Za-z0-9_-]+\/exec$/.test(url)) return;
+  if (!urlPublicaValidaMapro_(url)) return;
   const propriedades = PropertiesService.getScriptProperties();
   if (propriedades.getProperty(CONFIG.propriedadeUrlWebApp) === url) return;
   propriedades.setProperty(CONFIG.propriedadeUrlWebApp, url);
   console.info(JSON.stringify({ acao: 'URL_PUBLICA_WEB_APP_ATUALIZADA', url: url }));
 }
 
+function urlPublicaValidaMapro_(url) {
+  return /^https:\/\/script\.google\.com\/(?:macros\/|a\/macros\/[^/]+\/)s\/[A-Za-z0-9_-]+\/exec$/
+    .test(String(url || '').trim().replace(/\/+$/, ''));
+}
+
 function obterUrlPublicaAplicacao_() {
   const urlServico = String(ScriptApp.getService().getUrl() || '').trim().replace(/\/+$/, '');
-  if (/^https:\/\/script\.google\.com\/macros\/s\/[A-Za-z0-9_-]+\/exec$/.test(urlServico)) {
+  if (urlPublicaValidaMapro_(urlServico)) {
     return urlServico;
   }
   const propriedades = PropertiesService.getScriptProperties();
   const configurada = String(propriedades.getProperty(CONFIG.propriedadeUrlWebApp) || '')
     .trim().replace(/\/+$/, '');
-  if (/^https:\/\/script\.google\.com\/macros\/s\/[A-Za-z0-9_-]+\/exec$/.test(configurada)) {
+  if (urlPublicaValidaMapro_(configurada)) {
     return configurada;
+  }
+  const padrao = String(CONFIG.urlWebAppPublica || '').trim().replace(/\/+$/, '');
+  if (urlPublicaValidaMapro_(padrao)) {
+    return padrao;
   }
   throw new Error('A URL pública do Web App não está configurada.');
 }
 
 function montarMensagemResultadoEmails_(resultado) {
   if (!resultado) return 'Solicitação aprovada com sucesso.';
+  const pendentes = (resultado.pendentes || []).length;
   const problemas = resultado.falhas.length + resultado.naoEncontrados.length;
-  if (!problemas) {
+  if (!problemas && !pendentes) {
     return 'Solicitação aprovada e ' + resultado.enviados +
       (resultado.enviados === 1 ? ' e-mail enviado.' : ' e-mails enviados.');
   }
-  return 'Solicitação aprovada. Foram enviados ' + resultado.enviados +
-    ' e-mail(s), mas ' + problemas + ' destinatário(s) não puderam ser notificados.';
+  return 'Solicitação aprovada. Foram enviados ' + resultado.enviados + ' e-mail(s)' +
+    (pendentes ? ', e ' + pendentes + ' ficaram na fila automática' : '') +
+    (problemas ? ', mas ' + problemas + ' destinatário(s) possuem inconsistências' : '') + '.';
 }
 
 function montarMensagemResultadoEmailsRejeicao_(resultado) {
   if (!resultado) return 'Solicitação rejeitada com sucesso.';
+  const pendentes = (resultado.pendentes || []).length;
   const problemas = resultado.falhas.length + resultado.naoEncontrados.length;
-  if (!problemas) {
+  if (!problemas && !pendentes) {
     return 'Solicitação rejeitada e ' + resultado.enviados +
       (resultado.enviados === 1 ? ' e-mail enviado.' : ' e-mails enviados.');
   }
-  return 'Solicitação rejeitada. Foram enviados ' + resultado.enviados +
-    ' e-mail(s), mas ' + problemas + ' destinatário(s) não puderam ser notificados.';
+  return 'Solicitação rejeitada. Foram enviados ' + resultado.enviados + ' e-mail(s)' +
+    (pendentes ? ', e ' + pendentes + ' ficaram na fila automática' : '') +
+    (problemas ? ', mas ' + problemas + ' destinatário(s) possuem inconsistências' : '') + '.';
+}
+
+function montarMensagemResultadoReenvioAprovacao_(resultado) {
+  const pendentes = (resultado.pendentes || []).length;
+  const problemas = resultado.falhas.length + resultado.naoEncontrados.length;
+  if (!problemas && !pendentes) {
+    return resultado.enviados +
+      (resultado.enviados === 1
+        ? ' e-mail de aprovação reenviado com sucesso.'
+        : ' e-mails de aprovação reenviados com sucesso.');
+  }
+  return 'Foram reenviados ' + resultado.enviados + ' e-mail(s)' +
+    (pendentes ? ', e ' + pendentes + ' ficaram na fila automática' : '') +
+    (problemas ? ', mas ' + problemas + ' destinatário(s) possuem inconsistências' : '') + '.';
 }
 
 function formatarListaPontuadaEmail_(valor, padrao) {
@@ -2062,6 +2189,7 @@ function montarSecoesDadosSolicitacaoEmail_(solicitacao, rotuloId, valorId) {
       titulo: 'INFORMAÇÕES COMPLEMENTARES',
       campos: [
         ['Processo crítico?', valorOuPadrao(solicitacao.PROCESSO_CRITICO)],
+        ['Faz parte de iniciativa estratégica?', valorOuPadrao(solicitacao.INICIATIVA_ESTRATEGICA)],
         ['Envolve sistema?', valorOuPadrao(solicitacao.ENVOLVE_SISTEMA)],
         ['Sistema(s) envolvido(s)', formatarListaPontuadaEmail_(solicitacao.SISTEMAS_ENVOLVIDOS)]
       ]

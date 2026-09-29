@@ -75,10 +75,119 @@ assert.match(mapros, /Esta Mapro foi cancelada e está disponível somente para 
 assert.match(mapros, /function cancelarMaprosInativas_/);
 assert.match(mapros, /function prepararInativacaoResponsavelMapro_/);
 assert.match(mapros, /\['CONCLUIDA', 'NAO_APLICAVEL'\]\.indexOf\(status\)/);
+assert.match(mapros, /destinatarios:\s*emails/);
+assert.match(mapros, /email !== emailInativado/);
+assert.match(mapros, /liderInativado:\s*liderInativado/);
+assert.match(mapros, /É necessário definir um novo líder/);
+assert.deepEqual(JSON.parse(vm.runInContext(`JSON.stringify(
+  obterDestinatariosAvisoInativacaoMapro_([
+    {ID_MAPRO:'1',EMAIL:'inativo@empresa.com',ATIVO:'NAO'},
+    {ID_MAPRO:'1',EMAIL:'participante@empresa.com',ATIVO:'SIM'},
+    {ID_MAPRO:'1',EMAIL:'participante@empresa.com',ATIVO:'SIM'},
+    {ID_MAPRO:'2',EMAIL:'outro@empresa.com',ATIVO:'SIM'}
+  ], {ID_MAPRO:'1','EMAIL_LÍDER':'lider@empresa.com'}, 'inativo@empresa.com'))`, contexto)),
+  ['participante@empresa.com', 'lider@empresa.com']);
 assert.match(mapros, /function enviarEmailConclusaoProjetoMapro_/);
+assert.equal(vm.runInContext(
+  "responsavelPermitidoNaEdicaoMapro_({ID_RESPONSAVEL:'07'}, {ID:'7'}, {})",
+  contexto
+), true);
+assert.equal(vm.runInContext(
+  "responsavelPermitidoNaEdicaoMapro_({ID_RESPONSAVEL:'07'}, {ID:'8'}, {})",
+  contexto
+), false);
+assert.equal(vm.runInContext(
+  "responsavelPermitidoNaEdicaoMapro_(null, {ID:'8'}, {'8':true})",
+  contexto
+), true);
+assert.doesNotThrow(function () {
+  vm.runInContext(`validarAtividadeMapro_({
+    idMapro:'1', idAtividade:'pai-legado', idAtividadePai:'topico', tipo:'ATIVIDADE',
+    nomeAtividade:'Atividade agregadora', idResponsavel:'', dataInicio:'', dataFinal:'',
+    status:'PLANEJADA'
+  }, {permitirCamposOperacionaisVazios:true})`, contexto);
+});
+assert.throws(function () {
+  vm.runInContext(`validarAtividadeMapro_({
+    idMapro:'1', idAtividade:'folha', idAtividadePai:'topico', tipo:'ATIVIDADE',
+    nomeAtividade:'Atividade folha', idResponsavel:'', dataInicio:'', dataFinal:'',
+    status:'PLANEJADA'
+  })`, contexto);
+}, /Selecione o responsável/);
+assert.match(mapros,
+  /const houveReplanejamento = acompanhamentoIniciado && Boolean\(atual\) &&[\s\S]{0,80}!atividadeTemFilhos/);
+assert.match(codigo, /function reenviarEmailsAprovacaoMapro\(/);
+assert.match(codigo, /enviarEmailsAprovacaoMapro_\(registro, agora, urlPublicaAprovacao\)/);
+assert.match(
+  codigo,
+  /const urlPublicaAprovacao[\s\S]*obterUrlPublicaAplicacao_\(\)[\s\S]*aba\.getRange\(linha, 4\)\.setValue\(status\)/
+);
 assert.match(codigo, /ANALISAR SOLICITAÇÃO/);
 assert.match(codigo, /itens\.join\(', '\) \+ '\.'/);
 assert.match(mapros, /String\(atividade\.TIPO \|\| ''\)\.toUpperCase\(\) === 'TOPICO'/);
+assert.match(codigo, /'PROCESSO_CRITICO', 'INICIATIVA_ESTRATEGICA', 'ENVOLVE_SISTEMA'/);
+assert.match(mapros, /INICIATIVA_ESTRATEGICA:\s*iniciativaEstrategica/);
+assert.match(codigo, /Informe se o projeto faz parte de uma iniciativa estratégica/);
+
+const cadeiaPrazos = [
+  {ID_ATIVIDADE:'A',ID_MAPRO:'1',ID_ATIVIDADE_PREDECESSORA:'',ATIVO:'SIM',DATA_INICIO:'2026-09-01',DATA_FINAL:'2026-09-05',VERSION:1},
+  {ID_ATIVIDADE:'B',ID_MAPRO:'1',ID_ATIVIDADE_PREDECESSORA:'A',ATIVO:'SIM',DATA_INICIO:'2026-09-06',DATA_FINAL:'2026-09-10',VERSION:1},
+  {ID_ATIVIDADE:'C',ID_MAPRO:'1',ID_ATIVIDADE_PREDECESSORA:'B',ATIVO:'SIM',DATA_INICIO:'2026-09-11',DATA_FINAL:'2026-09-15',VERSION:1}
+];
+const cadeiaSerializada = JSON.stringify(cadeiaPrazos);
+const aposPredecessora = JSON.parse(vm.runInContext(`JSON.stringify((function () {
+  const registros = ${cadeiaSerializada};
+  propagarPrazoPredecessoraMapro_(registros, '1', 'A', 3, false, '', '', [], {B:true});
+  return registros;
+})())`, contexto));
+assert.equal(aposPredecessora[1].DATA_FINAL, '2026-09-10');
+assert.equal(aposPredecessora[2].DATA_FINAL, '2026-09-15');
+const aposEdicaoDireta = JSON.parse(vm.runInContext(`JSON.stringify((function () {
+  const registros = ${cadeiaSerializada};
+  propagarPrazoPredecessoraMapro_(registros, '1', 'B', 2, false, '', '', [], {B:true});
+  return registros;
+})())`, contexto));
+assert.equal(aposEdicaoDireta[2].DATA_FINAL, '2026-09-17');
+
+assert.equal(vm.runInContext(
+  "urlPublicaValidaMapro_('https://script.google.com/macros/s/abc_123-def/exec')",
+  contexto
+), true);
+assert.equal(vm.runInContext(
+  "urlPublicaValidaMapro_('https://script.google.com/a/macros/integrajca.com.br/s/abc_123-def/exec')",
+  contexto
+), true);
+assert.equal(vm.runInContext(
+  "urlPublicaValidaMapro_('https://script.google.com/a/macros/integrajca.com.br/s/abc_123-def/dev')",
+  contexto
+), false);
+contexto.ScriptApp = {
+  getService() {
+    return { getUrl() { return 'https://script.google.com/macros/s/teste/dev'; } };
+  }
+};
+contexto.PropertiesService = {
+  getScriptProperties() {
+    return {
+      getProperty() {
+        return 'https://script.google.com/a/macros/integrajca.com.br/s/publica/exec';
+      }
+    };
+  }
+};
+assert.equal(
+  vm.runInContext('obterUrlPublicaAplicacao_()', contexto),
+  'https://script.google.com/a/macros/integrajca.com.br/s/publica/exec'
+);
+contexto.PropertiesService = {
+  getScriptProperties() {
+    return { getProperty() { return ''; } };
+  }
+};
+assert.match(
+  vm.runInContext('obterUrlPublicaAplicacao_()', contexto),
+  /^https:\/\/script\.google\.com\/a\/macros\/integrajca\.com\.br\/s\/.+\/exec$/
+);
 
 assert.match(html, /data-classificacao="ATRASADA"/);
 assert.match(html, /data-classificacao="NO_PRAZO"/);

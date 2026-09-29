@@ -15,10 +15,12 @@ assert.match(dashboardHtml, /data-aba-dashboard="mapros"/);
 assert.match(dashboardHtml, /data-aba-dashboard="atividades"/);
 assert.match(dashboardHtml, /id="indicadores-atividades-dashboard"/);
 assert.match(dashboardHtml, /id="grafico-portfolios"/);
+assert.match(dashboardHtml, /id="grafico-portfolios" class="grafico-colunas-dashboard"/);
 assert.match(dashboardHtml, /id="tabela-minhas-atividades-container"/);
 assert.match(dashboardCss, /grid-template-columns:\s*minmax\(0, 1\.08fr\) minmax\(0, \.92fr\)/);
 assert.doesNotMatch(dashboardHtml, /id="grafico-status"/);
 assert.match(dashboardHtml, /id="filtro-nivel"/);
+assert.match(dashboardHtml, /id="filtro-iniciativa-estrategica"/);
 assert.match(dashboardHtml, /id="filtro-lider"[^>]*role="combobox"/);
 assert.match(dashboardHtml, /id="opcoes-lider-dashboard"[^>]*role="listbox"/);
 assert.match(dashboardHtml, /id="painel-indicadores-atividades-dashboard"/);
@@ -26,9 +28,12 @@ assert.match(dashboardHtml, /id="alternar-painel-indicadores-atividades-dashboar
 assert.doesNotMatch(dashboardHtml, /id="menu-portfolios-atividades-dashboard"/);
 assert.match(dashboardCss, /\.layout-atividades-dashboard\s*\{[\s\S]*grid-template-columns:\s*auto minmax\(0, 1fr\)/);
 assert.match(dashboardCss, /#grafico-conclusao\s*\{\s*width:\s*min\(100%, 165px\)/);
-assert.match(dashboardCss, /\.paineis-resumo-dashboard > \.cartao-grafico-dashboard\s*\{\s*min-height:\s*360px/);
-assert.match(dashboardCss, /grid-template-rows:\s*minmax\(140px, auto\) minmax\(58px, auto\) minmax\(64px, auto\)/);
+assert.match(dashboardCss, /\.paineis-resumo-dashboard\s*\{[\s\S]*align-items:\s*stretch/);
+assert.match(dashboardCss, /\.paineis-resumo-dashboard > \.cartao-grafico-dashboard\s*\{[\s\S]*height:\s*100%/);
+assert.match(dashboardCss, /grid-template-rows:\s*minmax\(140px, 1\.65fr\) minmax\(58px, \.72fr\) minmax\(64px, \.83fr\)/);
 assert.match(dashboardCss, /\.painel-graficos-resumo-dashboard\s*\{[\s\S]*grid-template-rows:\s*auto auto/);
+assert.match(dashboardCss, /\.grafico-colunas-dashboard\s*\{[\s\S]*grid-auto-flow:\s*column/);
+assert.match(read('DashboardJS.html'), /function renderizarColunasDashboard/);
 assert.match(dashboardHtml, /id="resumo-filtros-dashboard"/);
 assert.match(dashboardHtml, /id="pesquisa-tabela-mapros-dashboard"/);
 assert.match(dashboardHtml, /id="paginacao-atividades-dashboard"/);
@@ -37,7 +42,9 @@ assert.match(codigoServidor, /'CONCLUIDA_EM'/);
 assert.match(maprosServidor, /mapro\.CONCLUIDA_EM \|\| agora/);
 assert.match(maprosServidor, /mapro\.CONCLUIDA_EM \|\| mapro\.ATUALIZADO_EM/);
 assert.match(maprosServidor, /replanejada: Boolean\(maprosReplanejadas/);
+assert.match(maprosServidor, /iniciativaEstrategica: String\(mapro\.INICIATIVA_ESTRATEGICA/);
 assert.match(maprosServidor, /minhasAtividades: minhas\.map\(mapearMinha\)/);
+assert.match(maprosServidor, /selecionarAtividadesDashboardMapro_\([\s\S]*operacionais, usuario\.ID, admin/);
 assert.match(maprosServidor, /atualizadoEm: new Date\(\)\.toISOString\(\)/);
 const element = () => ({value:'', hidden:false, textContent:'', dataset:{},
   classList:{toggle(){},add(){},remove(){}}, style:{setProperty(){}},
@@ -53,13 +60,15 @@ const context = vm.createContext({console, document, setTimeout, clearTimeout,
 vm.runInContext(source('DashboardJS.html').replace('  iniciarDashboard();',''), context);
 vm.runInContext(`
   estadoDashboard.filtrados = [
-    {id:'1',status:'CONCLUÍDA',percentual:100,acompanhamentoIniciado:true},
+    {id:'1',status:'CONCLUÍDA',percentual:100,acompanhamentoIniciado:true,
+      iniciativaEstrategica:'SIM'},
     {id:'2',status:'EM ANDAMENTO',percentual:20,temNovasAtividades:true,replanejada:true,
+      iniciativaEstrategica:'NÃO',
       minhasAtividades:[{status:'PLANEJADA',saude:'VERMELHO'},
         {status:'PLANEJADA',saude:'VERDE'},{status:'CONCLUIDA',saude:'AZUL'}]},
-    {id:'3',status:'CANCELADA',percentual:0},
-    {id:'4',status:'AGUARDANDO INÍCIO',percentual:0},
-    {id:'5',status:'NÃO APLICÁVEL',percentual:0}
+    {id:'3',status:'CANCELADA',percentual:0,iniciativaEstrategica:'SIM'},
+    {id:'4',status:'AGUARDANDO INÍCIO',percentual:0,iniciativaEstrategica:'NÃO'},
+    {id:'5',status:'NÃO APLICÁVEL',percentual:0,iniciativaEstrategica:'SIM'}
   ];
 `, context);
 assert.equal(vm.runInContext("obterProjetosIndicadorDashboard('novasAtividades').length",context),1);
@@ -91,6 +100,13 @@ assert.equal(vm.runInContext('estadoDashboard.filtrados.length', context),5,
 vm.runInContext("estadoDashboard.aba = 'mapros'; aplicarFiltrosDashboard();", context);
 assert.equal(vm.runInContext('estadoDashboard.filtrados.length', context),1,
   'filtro avançado volta a valer na visão geral');
+vm.runInContext(`
+  document.getElementById('filtro-status').value = '';
+  document.getElementById('filtro-iniciativa-estrategica').value = 'SIM';
+  aplicarFiltrosDashboard();
+`, context);
+assert.equal(vm.runInContext('estadoDashboard.filtrados.length', context),3,
+  'filtro de iniciativa estratégica combina com a visão geral');
 vm.runInContext(source('maprosJS.html').replace('  iniciarPaginaMapros();',''),context);
 vm.runInContext(`
   estadoMapros.detalhe = {mapro:{acompanhamentoIniciado:false},atividades:[]};
@@ -126,6 +142,12 @@ vm.runInContext(`
     JSON.parse(vm.runInContext("JSON.stringify(obterIdsMaprosReplanejadasDashboardMapro_([{ID_MAPRO:'1',PRAZO_ANTERIOR:'2026-09-01',PRAZO_NOVO:'2026-09-10'},{ID_MAPRO:'2',PRAZO_ANTERIOR:'2026-09-10',PRAZO_NOVO:'2026-09-01'}]))",server)),
     {'1': true}
   );
+  assert.equal(vm.runInContext(`selecionarAtividadesDashboardMapro_([
+    {ID_RESPONSAVEL:'1'}, {ID_RESPONSAVEL:'2'}
+  ], '1', true).length`,server),2,'admin vê atividades de todos os usuários');
+  assert.equal(vm.runInContext(`selecionarAtividadesDashboardMapro_([
+    {ID_RESPONSAVEL:'1'}, {ID_RESPONSAVEL:'2'}
+  ], '1', false).length`,server),1,'demais perfis veem somente as próprias atividades');
   assert.equal(vm.runInContext(`calcularSituacaoProjetoMapro_('EM_ANDAMENTO', [
     {ID_ATIVIDADE:'1',TIPO:'ATIVIDADE',STATUS_ATIVIDADE:'CONCLUIDA'},
     {ID_ATIVIDADE:'2',TIPO:'ATIVIDADE',STATUS_ATIVIDADE:'CONCLUIDA'},

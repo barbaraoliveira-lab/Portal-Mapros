@@ -206,6 +206,7 @@
     border-radius: 11px; background: #f8f8fb;
   }
   .pergunta-complementar-solicitacao:first-child { grid-column: 1 / -1; }
+  .pergunta-sistema-solicitacao { grid-column: 1 / -1; }
   .pergunta-complementar-solicitacao legend {
     padding: 0 6px; color: #030441; font-size: .9rem; font-weight: 800;
   }
@@ -363,13 +364,14 @@
   @media (max-width: 720px) {
     #modal-solicitacao .modal-cabecalho-solicitacao { padding: 16px 10px; }
     .indicador-etapas-solicitacao { margin-inline: 0; }
-    .indicador-etapas-solicitacao small { font-size: .62rem; }
+    .indicador-etapas-solicitacao small { font-size: .75rem; }
     .identificacao-principal-solicitacao, .painel-lider-solicitacao,
     .grade-etapa-classificacao, .grade-plano-solicitacao,
     .grade-complementos-solicitacao { grid-template-columns: 1fr; }
     .grade-etapa-classificacao label:nth-child(3),
     .grade-etapa-classificacao label:last-child, .resultados-solicitacao { grid-column: auto; }
-    .pergunta-complementar-solicitacao:first-child { grid-column: auto; }
+    .pergunta-complementar-solicitacao:first-child,
+    .pergunta-sistema-solicitacao { grid-column: auto; }
     .foto-lider-solicitacao { width: 100%; height: 210px; }
     .grade-detalhes-solicitacao-admin { grid-template-columns: 1fr; }
     .secao-tramitacao-detalhes-admin { grid-column: auto; }
@@ -379,5 +381,9 @@
   @media (max-width: 560px) {
     .modal-informacao-cabecalho-mapro { padding: 18px 16px; }
     .conteudo-informacao-cabecalho-mapro dl > div { grid-template-columns: 1fr; gap: 3px; }
+    .titulo-secao-solicitacao { padding-right: 60px; }
+    .botao-informacao-solicitacao,
+    .remover-foto-solicitacao { min-width: 44px; min-height: 44px; }
+    .opcao-participante { min-height: 44px; font-size: .875rem; }
   }
 </style>
