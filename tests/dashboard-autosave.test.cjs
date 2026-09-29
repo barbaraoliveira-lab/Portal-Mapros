@@ -7,7 +7,7 @@ const source = n => read(n).replace(/^<script>\s*/, '').replace(/<\/script>\s*$/
 const dashboardHtml = read('Dashboard.html');
 const dashboardCss = read('DashboardCSS.html');
 const codigoServidor = read('Código.js');
-const maprosServidor = read('Mapros.js');
+const maprosServidor = read('Mapros.js') + read('MaprosParte2.js');
 assert.match(dashboardHtml, /id="abrir-portfolios-dashboard"/);
 assert.match(dashboardHtml, /id="painel-filtros-dashboard" hidden/);
 assert.match(dashboardHtml, /class="paineis-resumo-dashboard"/);

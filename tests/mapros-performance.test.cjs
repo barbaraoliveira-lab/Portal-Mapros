@@ -13,7 +13,8 @@ const contexto = {
 };
 vm.createContext(contexto);
 vm.runInContext(
-  fs.readFileSync(path.join(__dirname, '..', 'Mapros.js'), 'utf8'),
+  fs.readFileSync(path.join(__dirname, '..', 'Mapros.js'), 'utf8') +
+    fs.readFileSync(path.join(__dirname, '..', 'MaprosParte2.js'), 'utf8'),
   contexto
 );
 

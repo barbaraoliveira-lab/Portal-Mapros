@@ -190,7 +190,8 @@ assert.equal(
 );
 
 const codigo = fs.readFileSync('Código.js', 'utf8');
-const mapros = fs.readFileSync('Mapros.js', 'utf8');
+const mapros = fs.readFileSync('Mapros.js', 'utf8') +
+  fs.readFileSync('MaprosParte2.js', 'utf8');
 const emails = fs.readFileSync('Emails.js', 'utf8');
 const interfaceSolicitacoes = fs.readFileSync('solicitacoesDeMapro.html', 'utf8');
 assert.match(interfaceSolicitacoes,

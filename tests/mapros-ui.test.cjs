@@ -6,7 +6,8 @@ const raiz = path.join(__dirname, '..');
 const html = fs.readFileSync(path.join(raiz, 'mapros.html'), 'utf8');
 const css = fs.readFileSync(path.join(raiz, 'maprosCSS.html'), 'utf8');
 const cliente = fs.readFileSync(path.join(raiz, 'maprosJS.html'), 'utf8');
-const servidor = fs.readFileSync(path.join(raiz, 'Mapros.js'), 'utf8');
+const servidor = fs.readFileSync(path.join(raiz, 'Mapros.js'), 'utf8') +
+  fs.readFileSync(path.join(raiz, 'MaprosParte2.js'), 'utf8');
 const estilosGerais = fs.readFileSync(path.join(raiz, 'Styles.html'), 'utf8');
 const solicitacaoCss = fs.readFileSync(path.join(raiz, 'solicitacoesCabecalhoCSS.html'), 'utf8');
 const solicitacaoHtml = fs.readFileSync(path.join(raiz, 'solicitacoesDeMapro.html'), 'utf8');

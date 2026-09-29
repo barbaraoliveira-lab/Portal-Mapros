@@ -3,7 +3,8 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 
 const codigo = fs.readFileSync('Código.js', 'utf8');
-const mapros = fs.readFileSync('Mapros.js', 'utf8');
+const mapros = fs.readFileSync('Mapros.js', 'utf8') +
+  fs.readFileSync('MaprosParte2.js', 'utf8');
 const html = fs.readFileSync('mapros.html', 'utf8');
 const js = fs.readFileSync('maprosJS.html', 'utf8');
 const usuariosHtml = fs.readFileSync('cadastrosDeUsuarios.html', 'utf8');
