@@ -1,6 +1,7 @@
 const CABECALHOS_MAPRO_PARTICIPANTES = [
   'ID_VINCULO', 'ID_MAPRO', 'ID_USUARIO', 'NOME', 'EMAIL', 'PAPEL', 'ATIVO',
-  'ADICIONADO_EM', 'ADICIONADO_POR'
+  'ADICIONADO_EM', 'ADICIONADO_POR', 'EMAIL_RELACIONAMENTO_PENDENTE',
+  'ID_EVENTO_RELACIONAMENTO'
 ];
 
 const CABECALHOS_MAPRO_ATIVIDADES = [
@@ -326,7 +327,7 @@ function sincronizarParticipantesMapros_(abaMapros, abaParticipantes, abaUsuario
         Utilities.getUuid(), idMapro,
         usuario ? formatarId_(Number(usuario.ID)) : membro.id,
         protegerTextoPlanilha_(usuario ? usuario.NOME : membro.nome),
-        membro.email, membro.papel, 'SIM', agora, CONFIG.emailAdministrador
+        membro.email, membro.papel, 'SIM', agora, CONFIG.emailAdministrador, '', ''
       ]);
       existentes[chave] = { PAPEL: membro.papel, ATIVO: 'SIM' };
     });
@@ -1886,6 +1887,7 @@ function adicionarParticipantesMapro(idMapro, participantesInformados) {
     const agora = new Date().toISOString();
     const novas = [];
     const selecionadosAlterados = [];
+    const acompanhamentoIniciado = Boolean(contexto.mapro.ACOMPANHAMENTO_INICIADO_EM);
     let atualizados = 0;
     selecionados.forEach(function (selecionado) {
       const usuario = selecionado.usuario;
@@ -1902,16 +1904,24 @@ function adicionarParticipantesMapro(idMapro, participantesInformados) {
         existente.item.ATIVO = 'SIM';
         existente.item.ADICIONADO_EM = agora;
         existente.item.ADICIONADO_POR = normalizarEmail_(contexto.usuario.EMAIL);
-        selecionadosAlterados.push(selecionado);
+        existente.item.EMAIL_RELACIONAMENTO_PENDENTE = 'SIM';
+        existente.item.ID_EVENTO_RELACIONAMENTO = Utilities.getUuid();
+        selecionadosAlterados.push(Object.assign({}, selecionado, {
+          idEventoRelacionamento: existente.item.ID_EVENTO_RELACIONAMENTO
+        }));
         atualizados += 1;
         return;
       }
+      const idEventoRelacionamento = Utilities.getUuid();
       novas.push([
         Utilities.getUuid(), formatarId_(Number(idMapro)), formatarId_(Number(usuario.ID)),
         protegerTextoPlanilha_(usuario.NOME), normalizarEmail_(usuario.EMAIL),
-        selecionado.papel, 'SIM', agora, normalizarEmail_(contexto.usuario.EMAIL)
+        selecionado.papel, 'SIM', agora, normalizarEmail_(contexto.usuario.EMAIL),
+        'SIM', idEventoRelacionamento
       ]);
-      selecionadosAlterados.push(selecionado);
+      selecionadosAlterados.push(Object.assign({}, selecionado, {
+        idEventoRelacionamento: idEventoRelacionamento
+      }));
     });
     if (atualizados && registros.length) {
       aba.getRange(2, 1, registros.length, CABECALHOS_MAPRO_PARTICIPANTES.length)
@@ -1930,24 +1940,29 @@ function adicionarParticipantesMapro(idMapro, participantesInformados) {
       realizadoPor: contexto.usuario.EMAIL
     }));
     if (bloqueio.hasLock()) bloqueio.releaseLock();
-    const resultadoEmails = enviarEmailsParticipantesRelacionadosMapro_(
-      contexto.mapro,
-      selecionadosAlterados
-    );
+    let resultadoEmails = { enviados: 0, pendentes: [], falhas: [], processados: [] };
+    if (acompanhamentoIniciado && selecionadosAlterados.length) {
+      resultadoEmails = enviarEmailsParticipantesRelacionadosMapro_(
+        contexto.mapro,
+        selecionadosAlterados
+      );
+      marcarEmailsRelacionamentoProcessadosMapro_(
+        idMapro,
+        resultadoEmails.processados
+      );
+    }
     const totalAlterado = novas.length + atualizados;
+    const mensagemEnvio = acompanhamentoIniciado
+      ? ' ' + resultadoEmails.enviados + ' e-mail(s) enviado(s).' +
+        (resultadoEmails.pendentes.length ? ' ' + resultadoEmails.pendentes.length +
+          ' e-mail(s) na fila automática.' : '') +
+        (resultadoEmails.falhas.length ? ' Falha em ' + resultadoEmails.falhas.length + ' envio(s).' : '')
+      : ' O e-mail de relacionamento será enviado ao iniciar o acompanhamento.';
     return {
       sucesso: true,
       mensagem: totalAlterado
-        ? totalAlterado + ' participante(s) relacionado(s) ao projeto. ' +
-          resultadoEmails.enviados + ' e-mail(s) enviado(s).' +
-          (resultadoEmails.pendentes.length ? ' ' + resultadoEmails.pendentes.length +
-            ' e-mail(s) na fila automática.' : '') +
-          (resultadoEmails.falhas.length ? ' Falha em ' + resultadoEmails.falhas.length + ' envio(s).' : '')
-        : 'As permissões foram mantidas. ' + resultadoEmails.enviados +
-          ' e-mail(s) de relacionamento enviado(s).' +
-          (resultadoEmails.pendentes.length ? ' ' + resultadoEmails.pendentes.length +
-            ' e-mail(s) na fila automática.' : '') +
-          (resultadoEmails.falhas.length ? ' Falha em ' + resultadoEmails.falhas.length + ' envio(s).' : ''),
+        ? totalAlterado + ' participante(s) relacionado(s) ao projeto.' + mensagemEnvio
+        : 'As permissões foram mantidas.',
       dados: {
         participantes: selecionados.map(function (selecionado) {
           return {
@@ -2021,6 +2036,7 @@ function enviarEmailsParticipantesRelacionadosMapro_(mapro, selecionados) {
   let enviados = 0;
   const falhas = [];
   const pendentes = [];
+  const processados = [];
   selecionados.forEach(function (selecionado) {
     const usuario = selecionado.usuario;
     const email = normalizarEmail_(usuario.EMAIL);
@@ -2035,14 +2051,90 @@ function enviarEmailsParticipantesRelacionadosMapro_(mapro, selecionados) {
       tipo: 'PARTICIPANTE_RELACIONADO',
       contextoId: formatarId_(Number(mapro.ID_MAPRO)),
       chaveIdempotencia: 'PARTICIPANTE_RELACIONADO:' + formatarId_(Number(mapro.ID_MAPRO)) +
-        ':' + formatarId_(Number(usuario.ID)) + ':' + String(selecionado.papel || ''),
-      forcarNovo: true
+        ':' + formatarId_(Number(usuario.ID)) + ':' +
+        String(selecionado.idEventoRelacionamento || selecionado.papel || '')
     });
-    if (resultado.enviado) enviados += 1;
-    else if (resultado.enfileirado) pendentes.push(email);
-    else falhas.push(email);
+    if (resultado.enviado) {
+      enviados += 1;
+      processados.push(String(selecionado.idEventoRelacionamento || ''));
+    } else if (resultado.enfileirado) {
+      pendentes.push(email);
+      processados.push(String(selecionado.idEventoRelacionamento || ''));
+    } else {
+      falhas.push(email);
+    }
   });
-  return { enviados: enviados, pendentes: pendentes, falhas: falhas };
+  return {
+    enviados: enviados,
+    pendentes: pendentes,
+    falhas: falhas,
+    processados: processados.filter(Boolean)
+  };
+}
+
+function obterParticipantesPendentesRelacionamentoMapro_(idMapro) {
+  const usuariosPorId = {};
+  lerRegistros_(obterAbaUsuarios_(), CABECALHOS_USUARIOS).forEach(function (usuario) {
+    usuariosPorId[String(Number(usuario.ID))] = usuario;
+  });
+  return lerRegistros_(obterAbaMaproParticipantes_(), CABECALHOS_MAPRO_PARTICIPANTES)
+    .filter(function (vinculo) {
+      const usuario = usuariosPorId[String(Number(vinculo.ID_USUARIO))];
+      return idsIguaisMapro_(vinculo.ID_MAPRO, idMapro) &&
+        String(vinculo.ATIVO || 'SIM').toUpperCase() !== 'NAO' &&
+        String(vinculo.EMAIL_RELACIONAMENTO_PENDENTE || '').toUpperCase() === 'SIM' &&
+        Boolean(vinculo.ID_EVENTO_RELACIONAMENTO) &&
+        Boolean(usuario) && String(usuario.STATUS || '').toUpperCase() === 'ATIVO';
+    })
+    .map(function (vinculo) {
+      return {
+        usuario: usuariosPorId[String(Number(vinculo.ID_USUARIO))],
+        papel: String(vinculo.PAPEL || 'OBSERVADOR').toUpperCase(),
+        idEventoRelacionamento: String(vinculo.ID_EVENTO_RELACIONAMENTO || '')
+      };
+    });
+}
+
+function marcarEmailsRelacionamentoProcessadosMapro_(idMapro, idsEventos) {
+  const processados = (idsEventos || []).reduce(function (resultado, idEvento) {
+    if (idEvento) resultado[String(idEvento)] = true;
+    return resultado;
+  }, {});
+  if (!Object.keys(processados).length) return;
+  const bloqueio = LockService.getDocumentLock();
+  try {
+    bloqueio.waitLock(10000);
+    const aba = obterAbaMaproParticipantes_();
+    const registros = lerRegistros_(aba, CABECALHOS_MAPRO_PARTICIPANTES);
+    let alterou = false;
+    registros.forEach(function (vinculo) {
+      if (idsIguaisMapro_(vinculo.ID_MAPRO, idMapro) &&
+          processados[String(vinculo.ID_EVENTO_RELACIONAMENTO || '')]) {
+        vinculo.EMAIL_RELACIONAMENTO_PENDENTE = 'NAO';
+        alterou = true;
+      }
+    });
+    if (alterou && registros.length) {
+      aba.getRange(2, 1, registros.length, CABECALHOS_MAPRO_PARTICIPANTES.length)
+        .setValues(registros.map(function (vinculo) {
+          return CABECALHOS_MAPRO_PARTICIPANTES.map(function (cabecalho) {
+            return vinculo[cabecalho] == null ? '' : vinculo[cabecalho];
+          });
+        }));
+    }
+  } finally {
+    if (bloqueio.hasLock()) bloqueio.releaseLock();
+  }
+}
+
+function enviarEmailsParticipantesPendentesMapro_(mapro) {
+  const selecionados = obterParticipantesPendentesRelacionamentoMapro_(mapro.ID_MAPRO);
+  if (!selecionados.length) {
+    return { enviados: 0, pendentes: [], falhas: [], processados: [] };
+  }
+  const resultado = enviarEmailsParticipantesRelacionadosMapro_(mapro, selecionados);
+  marcarEmailsRelacionamentoProcessadosMapro_(mapro.ID_MAPRO, resultado.processados);
+  return resultado;
 }
 
 function montarEmailParticipanteRelacionadoTextoMapro_(usuario, papel, mapro, urlProjeto) {

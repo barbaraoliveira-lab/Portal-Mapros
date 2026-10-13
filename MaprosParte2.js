@@ -140,6 +140,7 @@ function iniciarAcompanhamentoMapro(idMapro, version) {
     }));
     bloqueio.releaseLock();
     const resultadoEmails = enviarEmailsAberturaProjetoMapro_(atual);
+    const resultadoRelacionamentos = enviarEmailsParticipantesPendentesMapro_(atual);
     const mensagemEmails = resultadoEmails.falhas.length
       ? ' A abertura foi comunicada a ' + resultadoEmails.enviados +
         ' participante(s), mas ' + resultadoEmails.falhas.length +
@@ -148,16 +149,27 @@ function iniciarAcompanhamentoMapro(idMapro, version) {
         (resultadoEmails.pendentes.length
           ? ' ' + resultadoEmails.pendentes.length + ' e-mail(s) estão na fila automática.'
           : '');
+    const mensagemRelacionamentos = resultadoRelacionamentos.falhas.length
+      ? ' O relacionamento foi comunicado a ' + resultadoRelacionamentos.enviados +
+        ' participante(s), mas ' + resultadoRelacionamentos.falhas.length +
+        ' e-mail(s) não puderam ser registrados.'
+      : (resultadoRelacionamentos.enviados || resultadoRelacionamentos.pendentes.length
+        ? ' O relacionamento foi comunicado a ' + resultadoRelacionamentos.enviados +
+          ' participante(s).' + (resultadoRelacionamentos.pendentes.length
+            ? ' ' + resultadoRelacionamentos.pendentes.length +
+              ' e-mail(s) estão na fila automática.'
+            : '')
+        : '');
     return {
       sucesso: true,
       mensagem: 'Acompanhamento iniciado. A Mapro está apta para acompanhamento na Contagiro designada.' +
-        mensagemEmails,
+        mensagemEmails + mensagemRelacionamentos,
       dados: {
         iniciadoEm: agora,
         version: alteracoes.VERSION,
-        emailsEnviados: resultadoEmails.enviados,
-        emailsPendentes: resultadoEmails.pendentes.length,
-        emailsComFalha: resultadoEmails.falhas.length
+        emailsEnviados: resultadoEmails.enviados + resultadoRelacionamentos.enviados,
+        emailsPendentes: resultadoEmails.pendentes.length + resultadoRelacionamentos.pendentes.length,
+        emailsComFalha: resultadoEmails.falhas.length + resultadoRelacionamentos.falhas.length
       }
     };
   } catch (erro) {
@@ -1446,7 +1458,7 @@ function sincronizarTrocaLiderMapro_(idMapro, novoLider, emailAnterior, realizad
       .setValues([[
         Utilities.getUuid(), formatarId_(Number(idMapro)), formatarId_(Number(novoLider.ID)),
         protegerTextoPlanilha_(novoLider.NOME), emailNovo, 'LIDER', 'SIM', agora,
-        normalizarEmail_(realizadoPor)
+        normalizarEmail_(realizadoPor), '', ''
       ]]);
   }
 }

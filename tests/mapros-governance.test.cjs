@@ -89,6 +89,36 @@ assert.deepEqual(JSON.parse(vm.runInContext(`JSON.stringify(
   ], {ID_MAPRO:'1','EMAIL_LÍDER':'lider@empresa.com'}, 'inativo@empresa.com'))`, contexto)),
   ['participante@empresa.com', 'lider@empresa.com']);
 assert.match(mapros, /function enviarEmailConclusaoProjetoMapro_/);
+assert.match(mapros, /'EMAIL_RELACIONAMENTO_PENDENTE'/);
+assert.match(mapros, /'ID_EVENTO_RELACIONAMENTO'/);
+assert.match(mapros,
+  /if \(acompanhamentoIniciado && selecionadosAlterados\.length\) \{[\s\S]*enviarEmailsParticipantesRelacionadosMapro_/);
+assert.match(mapros,
+  /const resultadoRelacionamentos = enviarEmailsParticipantesPendentesMapro_\(atual\)/);
+assert.match(mapros,
+  /const resultadoEmails = enviarEmailsAberturaProjetoMapro_\(atual\);[\s\S]{0,160}enviarEmailsParticipantesPendentesMapro_/);
+assert.doesNotMatch(
+  mapros.match(/function enviarEmailsParticipantesRelacionadosMapro_\([\s\S]*?\n\}/)[0],
+  /forcarNovo/
+);
+const mensagensRelacionamento = [];
+contexto.entregarEmailMapro_ = function (mensagem) {
+  mensagensRelacionamento.push(mensagem);
+  return {enviado: true, enfileirado: true};
+};
+contexto.montarUrlProjetoMapro_ = function () { return 'https://example.test/mapro'; };
+const resultadoRelacionamento = JSON.parse(vm.runInContext(`JSON.stringify(
+  enviarEmailsParticipantesRelacionadosMapro_(
+    {ID_MAPRO:'7',NOME_PROJETO:'Projeto teste'},
+    [{usuario:{ID:'12',NOME:'Pessoa',EMAIL:'pessoa@empresa.com'},papel:'EDITOR',
+      idEventoRelacionamento:'evento-123'}]
+  ))`, contexto));
+assert.equal(resultadoRelacionamento.enviados, 1);
+assert.deepEqual(resultadoRelacionamento.processados, ['evento-123']);
+assert.equal(
+  mensagensRelacionamento[0].chaveIdempotencia,
+  'PARTICIPANTE_RELACIONADO:07:12:evento-123'
+);
 assert.equal(vm.runInContext(
   "responsavelPermitidoNaEdicaoMapro_({ID_RESPONSAVEL:'07'}, {ID:'7'}, {})",
   contexto
