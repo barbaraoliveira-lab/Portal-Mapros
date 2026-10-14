@@ -148,6 +148,12 @@ acompanhamento. Registros legados permanecem sem marcação para evitar reenvios
 a mensagem é entregue ou registrada na caixa de saída, a pendência é encerrada; o evento
 continua identificado para garantir idempotência.
 
+Na migração de estrutura, `ID_USUARIO`, `NOME` e `EMAIL` dos vínculos existentes são
+reconciliados com o cadastro atual de usuários, priorizando a correspondência pelo e-mail
+e usando o ID como fallback. A autorização de responsáveis repete essa resolução no
+servidor, de modo que vínculos antigos com ID vazio ou desatualizado não impeçam a
+atribuição de um `EDITOR`, `OBSERVADOR` ou `LIDER` ativo.
+
 As colunas `EVIDENCIA_ID`, `EVIDENCIA_NOME`, `EVIDENCIA_TIPO`, `EVIDENCIA_URL` e
 `EVIDENCIA_ENVIADA_POR`
 guardam somente metadados da evidência atual. O arquivo fica no Google Drive, em uma

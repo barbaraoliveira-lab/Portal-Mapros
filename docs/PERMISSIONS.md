@@ -73,7 +73,9 @@ início do acompanhamento, o e-mail com a Mapro, a permissão concedida e o link
 fica pendente. Ele é enviado ao confirmar “Iniciar acompanhamento”, além do e-mail de
 abertura do projeto. Vínculos criados ou alterados depois desse marco recebem o e-mail de
 relacionamento imediatamente. A resposta da operação também atualiza imediatamente as
-opções de responsável na página aberta.
+opções de responsável na página aberta. A pendência do e-mail não suspende o vínculo:
+um `EDITOR` ou `OBSERVADOR` ativo pode ser atribuído às atividades antes do início do
+acompanhamento.
 
 Quando um participante cria uma nova solicitação de Mapro, o endereço administrativo
 central do SGI recebe um aviso por e-mail sem os dados da solicitação. Edições posteriores

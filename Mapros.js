@@ -237,8 +237,11 @@ function sincronizarParticipantesMapros_(abaMapros, abaParticipantes, abaUsuario
   if (!mapros.length) return;
   const usuarios = lerRegistros_(abaUsuarios, CABECALHOS_USUARIOS);
   const porEmail = {};
+  const porId = {};
   usuarios.forEach(function (usuario) {
     porEmail[normalizarEmail_(usuario.EMAIL)] = usuario;
+    const id = chaveIdUsuarioMapro_(usuario.ID);
+    if (id) porId[id] = usuario;
   });
   const solicitacoesPorId = {};
   lerRegistros_(obterAbaSolicitacoesMapro_(), CABECALHOS_SOLICITACOES_MAPRO)
@@ -249,34 +252,46 @@ function sincronizarParticipantesMapros_(abaMapros, abaParticipantes, abaUsuario
     abaParticipantes,
     CABECALHOS_MAPRO_PARTICIPANTES
   );
-  const existentes = {};
-  vinculosExistentes.forEach(function (vinculo) {
-    existentes[chaveParticipanteMapro_(vinculo.ID_MAPRO, vinculo.EMAIL)] = vinculo;
-  });
   const agora = new Date().toISOString();
   const novasLinhas = [];
   let alterouVinculo = false;
   vinculosExistentes.forEach(function (vinculo) {
-    const usuarioVinculado = porEmail[normalizarEmail_(vinculo.EMAIL)];
+    const reconciliacao = reconciliarIdentidadeParticipanteMapro_(
+      vinculo,
+      porEmail,
+      porId
+    );
+    if (reconciliacao.alterou) alterouVinculo = true;
+    const usuarioVinculado = reconciliacao.usuario;
     if (usuarioVinculado && String(usuarioVinculado.STATUS || '').toUpperCase() !== 'ATIVO' &&
         String(vinculo.ATIVO || 'SIM').toUpperCase() !== 'NAO') {
       vinculo.ATIVO = 'NAO';
       alterouVinculo = true;
     }
   });
+  const existentes = {};
+  vinculosExistentes.forEach(function (vinculo) {
+    existentes[chaveParticipanteMapro_(vinculo.ID_MAPRO, vinculo.EMAIL)] = vinculo;
+  });
   mapros.forEach(function (mapro) {
     const idMapro = formatarId_(Number(mapro.ID_MAPRO));
     const membrosPorEmail = {};
     const prioridadePapel = { ACESSO: 1, OBSERVADOR: 2, LIDER: 3, EDITOR: 4 };
     function incluirMembro(membro) {
-      const email = normalizarEmail_(membro.email);
+      const idMembro = chaveIdUsuarioMapro_(membro.id);
+      const usuarioCadastrado = porEmail[normalizarEmail_(membro.email)] ||
+        (idMembro ? porId[idMembro] : null);
+      const email = normalizarEmail_(usuarioCadastrado ? usuarioCadastrado.EMAIL : membro.email);
       if (!email) return;
-      const usuarioCadastrado = porEmail[email];
       if (usuarioCadastrado &&
           String(usuarioCadastrado.STATUS || '').toUpperCase() !== 'ATIVO') return;
       const atual = membrosPorEmail[email];
       if (!atual || prioridadePapel[membro.papel] > prioridadePapel[atual.papel]) {
-        membrosPorEmail[email] = Object.assign({}, membro, { email: email });
+        membrosPorEmail[email] = Object.assign({}, membro, {
+          email: email,
+          id: usuarioCadastrado ? formatarId_(Number(usuarioCadastrado.ID)) : membro.id,
+          nome: usuarioCadastrado ? String(usuarioCadastrado.NOME || '') : membro.nome
+        });
       }
     }
     if (mapro['EMAIL_LÍDER']) {
@@ -314,12 +329,17 @@ function sincronizarParticipantesMapros_(abaMapros, abaParticipantes, abaUsuario
       const chave = chaveParticipanteMapro_(idMapro, membro.email);
       const existente = existentes[chave];
       if (existente) {
+        const reconciliacao = reconciliarIdentidadeParticipanteMapro_(
+          existente,
+          porEmail,
+          porId
+        );
         const papelAtual = String(existente.PAPEL || 'ACESSO').toUpperCase();
         const devePromover = prioridadePapel[membro.papel] > (prioridadePapel[papelAtual] || 0);
         const deveReativar = String(existente.ATIVO || 'SIM').toUpperCase() === 'NAO';
         if (devePromover) existente.PAPEL = membro.papel;
         if (deveReativar) existente.ATIVO = 'SIM';
-        if (devePromover || deveReativar) alterouVinculo = true;
+        if (reconciliacao.alterou || devePromover || deveReativar) alterouVinculo = true;
         return;
       }
       const usuario = porEmail[membro.email];
@@ -349,6 +369,43 @@ function sincronizarParticipantesMapros_(abaMapros, abaParticipantes, abaUsuario
       CABECALHOS_MAPRO_PARTICIPANTES.length
     ).setValues(novasLinhas);
   }
+}
+
+function chaveIdUsuarioMapro_(idUsuario) {
+  const numero = Number(idUsuario);
+  return Number.isInteger(numero) && numero > 0 ? String(numero) : '';
+}
+
+/**
+ * Corrige vínculos antigos usando o cadastro de usuários como fonte canônica.
+ * O e-mail tem precedência porque permanece estável quando IDs legados estão vazios
+ * ou apontam para outro cadastro; o ID é usado como fallback para e-mails antigos.
+ */
+function reconciliarIdentidadeParticipanteMapro_(vinculo, usuariosPorEmail, usuariosPorId) {
+  const emailAtual = normalizarEmail_(vinculo && vinculo.EMAIL);
+  const idAtual = chaveIdUsuarioMapro_(vinculo && vinculo.ID_USUARIO);
+  const usuario = (usuariosPorEmail && usuariosPorEmail[emailAtual]) ||
+    (idAtual && usuariosPorId && usuariosPorId[idAtual]) || null;
+  if (!vinculo || !usuario) return { alterou: false, usuario: usuario };
+
+  const idCanonico = formatarId_(Number(usuario.ID));
+  const nomeCanonico = protegerTextoPlanilha_(usuario.NOME);
+  const emailCanonico = normalizarEmail_(usuario.EMAIL);
+  let alterou = false;
+  if (String(vinculo.ID_USUARIO || '') !== idCanonico) {
+    vinculo.ID_USUARIO = idCanonico;
+    alterou = true;
+  }
+  if (String(vinculo.NOME || '') !== nomeCanonico) {
+    vinculo.NOME = nomeCanonico;
+    alterou = true;
+  }
+  if (normalizarEmail_(vinculo.EMAIL) !== emailCanonico ||
+      String(vinculo.EMAIL || '') !== emailCanonico) {
+    vinculo.EMAIL = emailCanonico;
+    alterou = true;
+  }
+  return { alterou: alterou, usuario: usuario };
 }
 
 function carregarPaginaMapros() {
@@ -601,12 +658,7 @@ function obterDetalhesMapro(idMapro) {
           departamento: String(item.DEPARTAMENTO || '').trim()
         };
       }).sort(function (a, b) { return a.nome.localeCompare(b.nome, 'pt-BR'); });
-    const idsResponsaveis = {};
-    participantes.forEach(function (participante) {
-      if (['LIDER', 'EDITOR', 'OBSERVADOR'].indexOf(participante.papel) !== -1) {
-        idsResponsaveis[String(Number(participante.id))] = true;
-      }
-    });
+    const idsResponsaveis = obterIdsResponsaveisPermitidosMapro_(participantes, usuarios);
     const responsaveis = usuarios.filter(function (usuario) {
       return Boolean(idsResponsaveis[String(Number(usuario.id))]);
     });
@@ -922,12 +974,10 @@ function salvarAtividadeMapro(dados) {
       return idsIguaisMapro_(usuario.ID, entrada.idResponsavel) &&
         String(usuario.STATUS).toUpperCase() === 'ATIVO';
     });
-    const responsaveisPermitidos = {};
-    obterParticipantesAtivosMapro_(entrada.idMapro).forEach(function (participante) {
-      if (['LIDER', 'EDITOR', 'OBSERVADOR'].indexOf(participante.papel) !== -1) {
-        responsaveisPermitidos[String(Number(participante.id))] = true;
-      }
-    });
+    const responsaveisPermitidos = obterIdsResponsaveisPermitidosMapro_(
+      obterParticipantesAtivosMapro_(entrada.idMapro),
+      usuarios
+    );
     if (entrada.tipo !== 'TOPICO' && !responsavel) {
       throw new Error('Selecione um responsável relacionado ao projeto.');
     }
@@ -1130,12 +1180,10 @@ function salvarEdicoesAtividadesMapro(dados) {
         usuariosPorId[String(Number(usuario.ID))] = usuario;
       }
     });
-    const responsaveisPermitidos = {};
-    contexto.participantes.forEach(function (participante) {
-      if (['LIDER', 'EDITOR', 'OBSERVADOR'].indexOf(participante.papel) !== -1) {
-        responsaveisPermitidos[String(Number(participante.id))] = true;
-      }
-    });
+    const responsaveisPermitidos = obterIdsResponsaveisPermitidosMapro_(
+      contexto.participantes,
+      usuarios
+    );
     const departamentos = lerValoresBaseMapro_(
       obterPlanilha_().getSheetByName(CONFIG.abaBaseDepartamentos), 'DEPARTAMENTO'
     );
@@ -1880,6 +1928,23 @@ function adicionarParticipantesMapro(idMapro, participantesInformados) {
     });
     const aba = obterAbaMaproParticipantes_();
     const registros = lerRegistros_(aba, CABECALHOS_MAPRO_PARTICIPANTES);
+    const usuariosPorEmail = {};
+    const usuariosPorId = {};
+    usuarios.forEach(function (usuario) {
+      usuariosPorEmail[normalizarEmail_(usuario.EMAIL)] = usuario;
+      const idUsuario = chaveIdUsuarioMapro_(usuario.ID);
+      if (idUsuario) usuariosPorId[idUsuario] = usuario;
+    });
+    let registrosAtualizados = 0;
+    registros.forEach(function (item) {
+      if (!idsIguaisMapro_(item.ID_MAPRO, idMapro)) return;
+      const reconciliacao = reconciliarIdentidadeParticipanteMapro_(
+        item,
+        usuariosPorEmail,
+        usuariosPorId
+      );
+      if (reconciliacao.alterou) registrosAtualizados += 1;
+    });
     const existentes = {};
     registros.forEach(function (item, indice) {
       existentes[chaveParticipanteMapro_(item.ID_MAPRO, item.EMAIL)] = { item: item, indice: indice };
@@ -1910,6 +1975,7 @@ function adicionarParticipantesMapro(idMapro, participantesInformados) {
           idEventoRelacionamento: existente.item.ID_EVENTO_RELACIONAMENTO
         }));
         atualizados += 1;
+        registrosAtualizados += 1;
         return;
       }
       const idEventoRelacionamento = Utilities.getUuid();
@@ -1923,16 +1989,18 @@ function adicionarParticipantesMapro(idMapro, participantesInformados) {
         idEventoRelacionamento: idEventoRelacionamento
       }));
     });
-    if (atualizados && registros.length) {
+    if (registrosAtualizados && registros.length) {
       aba.getRange(2, 1, registros.length, CABECALHOS_MAPRO_PARTICIPANTES.length)
         .setValues(registros.map(function (item) {
-          return CABECALHOS_MAPRO_PARTICIPANTES.map(function (cabecalho) { return item[cabecalho]; });
+          return CABECALHOS_MAPRO_PARTICIPANTES.map(function (cabecalho) {
+            return item[cabecalho] == null ? '' : item[cabecalho];
+          });
         }));
     }
     if (novas.length) {
       aba.getRange(aba.getLastRow() + 1, 1, novas.length, novas[0].length).setValues(novas);
     }
-    if (novas.length || atualizados) atualizarParticipantesLegadosMapro_(idMapro);
+    if (novas.length || registrosAtualizados) atualizarParticipantesLegadosMapro_(idMapro);
     console.info(JSON.stringify({
       acao: 'PARTICIPANTES_MAPRO_RELACIONADOS',
       maproId: String(idMapro),
@@ -1940,6 +2008,24 @@ function adicionarParticipantesMapro(idMapro, participantesInformados) {
       realizadoPor: contexto.usuario.EMAIL
     }));
     if (bloqueio.hasLock()) bloqueio.releaseLock();
+    const participantesAtualizados = obterParticipantesAtivosMapro_(idMapro);
+    const idsResponsaveisAtualizados = obterIdsResponsaveisPermitidosMapro_(
+      participantesAtualizados,
+      usuarios
+    );
+    const responsaveisAtualizados = usuarios.filter(function (usuario) {
+      return String(usuario.STATUS || '').toUpperCase() === 'ATIVO' &&
+        Boolean(idsResponsaveisAtualizados[chaveIdUsuarioMapro_(usuario.ID)]);
+    }).map(function (usuario) {
+      return {
+        id: formatarId_(Number(usuario.ID)),
+        nome: String(usuario.NOME || ''),
+        email: normalizarEmail_(usuario.EMAIL),
+        departamento: String(usuario.DEPARTAMENTO || '').trim()
+      };
+    }).sort(function (a, b) {
+      return a.nome.localeCompare(b.nome, 'pt-BR');
+    });
     let resultadoEmails = { enviados: 0, pendentes: [], falhas: [], processados: [] };
     if (acompanhamentoIniciado && selecionadosAlterados.length) {
       resultadoEmails = enviarEmailsParticipantesRelacionadosMapro_(
@@ -1964,14 +2050,8 @@ function adicionarParticipantesMapro(idMapro, participantesInformados) {
         ? totalAlterado + ' participante(s) relacionado(s) ao projeto.' + mensagemEnvio
         : 'As permissões foram mantidas.',
       dados: {
-        participantes: selecionados.map(function (selecionado) {
-          return {
-            id: formatarId_(Number(selecionado.usuario.ID)),
-            nome: String(selecionado.usuario.NOME || ''),
-            email: normalizarEmail_(selecionado.usuario.EMAIL),
-            papel: selecionado.papel
-          };
-        })
+        participantes: participantesAtualizados,
+        responsaveis: responsaveisAtualizados
       }
     };
   } catch (erro) {

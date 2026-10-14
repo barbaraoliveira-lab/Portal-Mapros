@@ -2902,31 +2902,13 @@
         participantes
       );
       if (!resposta.sucesso) throw new Error(resposta.mensagem);
-      const relacionados = resposta.dados && resposta.dados.participantes || [];
-      relacionados.forEach(function (participante) {
-        const indiceParticipante = estadoMapros.detalhe.participantes.findIndex(function (item) {
-          return item.email === participante.email;
-        });
-        if (indiceParticipante === -1) estadoMapros.detalhe.participantes.push(participante);
-        else estadoMapros.detalhe.participantes[indiceParticipante] = participante;
-        const usuario = estadoMapros.detalhe.usuarios.find(function (item) {
-          return String(item.id) === String(participante.id);
-        });
-        const podeSerResponsavel = ['EDITOR', 'OBSERVADOR'].indexOf(participante.papel) !== -1;
-        const jaEstaNosResponsaveis = usuario && estadoMapros.detalhe.responsaveis.some(function (item) {
-          return String(item.id) === String(usuario.id);
-        });
-        if (usuario && podeSerResponsavel && !jaEstaNosResponsaveis) {
-          estadoMapros.detalhe.responsaveis.push(usuario);
-        } else if (usuario && !podeSerResponsavel && jaEstaNosResponsaveis) {
-          estadoMapros.detalhe.responsaveis = estadoMapros.detalhe.responsaveis.filter(function (item) {
-            return String(item.id) !== String(usuario.id);
-          });
-        }
-      });
-      estadoMapros.detalhe.responsaveis.sort(function (a, b) {
-        return a.nome.localeCompare(b.nome, 'pt-BR');
-      });
+      const dadosAtualizados = resposta.dados || {};
+      if (Array.isArray(dadosAtualizados.participantes)) {
+        estadoMapros.detalhe.participantes = dadosAtualizados.participantes;
+      }
+      if (Array.isArray(dadosAtualizados.responsaveis)) {
+        estadoMapros.detalhe.responsaveis = dadosAtualizados.responsaveis;
+      }
       fecharModalMapros('modal-participantes-mapro');
       mostrarAvisoMapros(resposta.mensagem);
       renderizarAtividadesMapro();

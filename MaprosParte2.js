@@ -590,6 +590,34 @@ function responsavelPermitidoNaEdicaoMapro_(atividadeAtual, responsavel, idsPerm
     idsIguaisMapro_(atividadeAtual.ID_RESPONSAVEL, responsavel.ID);
 }
 
+/**
+ * Resolve participantes pelos dados canônicos do cadastro de usuários.
+ * Assim, uma MAPRO antiga continua utilizável mesmo antes de o vínculo legado
+ * com ID vazio ou desatualizado ser fisicamente corrigido na planilha.
+ */
+function obterIdsResponsaveisPermitidosMapro_(participantes, usuarios) {
+  const usuariosPorEmail = {};
+  const usuariosPorId = {};
+  (usuarios || []).forEach(function (usuario) {
+    if (usuario.STATUS && String(usuario.STATUS).toUpperCase() !== 'ATIVO') return;
+    const email = normalizarEmail_(usuario.EMAIL || usuario.email);
+    const id = chaveIdUsuarioMapro_(usuario.ID || usuario.id);
+    if (email) usuariosPorEmail[email] = usuario;
+    if (id) usuariosPorId[id] = usuario;
+  });
+  return (participantes || []).reduce(function (permitidos, participante) {
+    const papel = String(participante.papel || participante.PAPEL || '').toUpperCase();
+    if (['LIDER', 'EDITOR', 'OBSERVADOR'].indexOf(papel) === -1) return permitidos;
+    const email = normalizarEmail_(participante.email || participante.EMAIL);
+    const id = chaveIdUsuarioMapro_(participante.id || participante.ID_USUARIO);
+    const usuario = usuariosPorEmail[email] || (id && usuariosPorId[id]);
+    if (usuario) {
+      permitidos[chaveIdUsuarioMapro_(usuario.ID || usuario.id)] = true;
+    }
+    return permitidos;
+  }, {});
+}
+
 function validarPaiAtividadeMapro_(entrada, registros) {
   if (entrada.tipo === 'TOPICO') {
     if (entrada.idAtividadePai) throw new Error('Um tópico não pode possuir item superior.');

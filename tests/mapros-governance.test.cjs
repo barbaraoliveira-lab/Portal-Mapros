@@ -131,6 +131,54 @@ assert.equal(vm.runInContext(
   "responsavelPermitidoNaEdicaoMapro_(null, {ID:'8'}, {'8':true})",
   contexto
 ), true);
+const vinculoLegadoReconciliado = JSON.parse(vm.runInContext(`JSON.stringify((function () {
+  const vinculo = {ID_USUARIO:'99',NOME:'Nome antigo',EMAIL:'pessoa@empresa.com',
+    EMAIL_RELACIONAMENTO_PENDENTE:'SIM',ID_EVENTO_RELACIONAMENTO:'evento-existente'};
+  const usuario = {ID:'7',NOME:'Pessoa Atual',EMAIL:'pessoa@empresa.com',STATUS:'ATIVO'};
+  const resultado = reconciliarIdentidadeParticipanteMapro_(
+    vinculo,
+    {'pessoa@empresa.com': usuario},
+    {'7': usuario}
+  );
+  return {vinculo:vinculo,alterou:resultado.alterou};
+})())`, contexto));
+assert.equal(vinculoLegadoReconciliado.alterou, true);
+assert.equal(vinculoLegadoReconciliado.vinculo.ID_USUARIO, '07');
+assert.equal(vinculoLegadoReconciliado.vinculo.NOME, 'Pessoa Atual');
+assert.equal(vinculoLegadoReconciliado.vinculo.EMAIL, 'pessoa@empresa.com');
+assert.equal(vinculoLegadoReconciliado.vinculo.EMAIL_RELACIONAMENTO_PENDENTE, 'SIM');
+assert.equal(vinculoLegadoReconciliado.vinculo.ID_EVENTO_RELACIONAMENTO, 'evento-existente');
+const responsaveisPermitidosLegados = JSON.parse(vm.runInContext(`JSON.stringify(
+  obterIdsResponsaveisPermitidosMapro_(
+    [{id:'99',email:'pessoa@empresa.com',papel:'OBSERVADOR'}],
+    [{ID:'7',NOME:'Pessoa Atual',EMAIL:'pessoa@empresa.com',STATUS:'ATIVO'}]
+  ))`, contexto));
+assert.deepEqual(responsaveisPermitidosLegados, {'7': true});
+const responsaveisSemPermissao = JSON.parse(vm.runInContext(`JSON.stringify(
+  obterIdsResponsaveisPermitidosMapro_(
+    [
+      {id:'7',email:'acesso@empresa.com',papel:'ACESSO'},
+      {id:'8',email:'inativo@empresa.com',papel:'OBSERVADOR'}
+    ],
+    [
+      {ID:'7',EMAIL:'acesso@empresa.com',STATUS:'ATIVO'},
+      {ID:'8',EMAIL:'inativo@empresa.com',STATUS:'INATIVO'}
+    ]
+  ))`, contexto));
+assert.deepEqual(responsaveisSemPermissao, {});
+const identidadePorEmailTemPrecedencia = JSON.parse(vm.runInContext(`JSON.stringify(
+  obterIdsResponsaveisPermitidosMapro_(
+    [{id:'8',email:'correta@empresa.com',papel:'OBSERVADOR'}],
+    [
+      {ID:'7',EMAIL:'correta@empresa.com',STATUS:'ATIVO'},
+      {ID:'8',EMAIL:'outra@empresa.com',STATUS:'ATIVO'}
+    ]
+  ))`, contexto));
+assert.deepEqual(identidadePorEmailTemPrecedencia, {'7': true});
+assert.match(mapros, /participantes:\s*participantesAtualizados/);
+assert.match(mapros, /responsaveis:\s*responsaveisAtualizados/);
+assert.match(js, /estadoMapros\.detalhe\.participantes = dadosAtualizados\.participantes/);
+assert.match(js, /estadoMapros\.detalhe\.responsaveis = dadosAtualizados\.responsaveis/);
 assert.doesNotThrow(function () {
   vm.runInContext(`validarAtividadeMapro_({
     idMapro:'1', idAtividade:'pai-legado', idAtividadePai:'topico', tipo:'ATIVIDADE',
