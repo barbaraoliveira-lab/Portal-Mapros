@@ -35,10 +35,11 @@ A aba `MAPRO_ATIVIDADES` representa uma árvore por meio de `ID_ATIVIDADE_PAI`:
 posição da linha na planilha.
 
 A numeração exibida (`1`, `1.1`, `1.1.1`) é derivada da árvore e da ordem; ela não é
-usada como identificador persistente. As datas de todo item que possui filhos são
-derivadas: o início é a menor data inicial dos descendentes e o término é a maior data final.
-A situação de um `TOPICO` também é derivada
-e a conclusão ocorre quando todos os itens aplicáveis descendentes estão concluídos.
+usada como identificador persistente. As datas e a situação de todo item que possui filhos
+são derivadas. O início é a menor data inicial dos descendentes e o término é a maior data
+final. Isso vale tanto para o `TOPICO` quanto para a `ATIVIDADE` que possua
+`SUBATIVIDADE`. A conclusão do item-pai ocorre quando todos os itens aplicáveis descendentes
+estão concluídos; quando nenhum descendente é aplicável, sua situação é `NAO_APLICAVEL`.
 O card “Total de itens na Mapro” inclui tópicos, atividades e subatividades ativas.
 
 No portfólio, a situação consolidada usa somente atividades e subatividades-folha ativas.

@@ -428,7 +428,6 @@ function agregarTopicosMapro_(atividades) {
       .filter(Boolean).sort();
     atividade.DATA_INICIO = inicios.length ? inicios[0] : '';
     atividade.DATA_FINAL = finais.length ? finais[finais.length - 1] : '';
-    if (String(atividade.TIPO || '').toUpperCase() !== 'TOPICO') return;
     const descendentes = [];
     const coletar = function (idPai) {
       (filhosPorPai[String(idPai)] || []).forEach(function (filha) {
@@ -568,7 +567,9 @@ function validarAtividadeMapro_(dados, opcoes) {
       .indexOf(atividade.status) === -1) {
     throw new Error('Selecione um status de atividade válido.');
   }
-  if (atividade.status === 'NAO_APLICAVEL' && atividade.justificativa.length < 5) {
+  if (atividade.status === 'NAO_APLICAVEL' &&
+      !configuracao.permitirCamposOperacionaisVazios &&
+      atividade.justificativa.length < 5) {
     throw new Error('Informe a justificativa para marcar a atividade como não aplicável.');
   }
   if (atividade.justificativa.length > 1500 || atividade.observacao.length > 3000) {
@@ -1239,9 +1240,40 @@ function calcularSituacaoProjetoMapro_(situacaoAtual, atividades) {
 function recalcularSituacoesMaprosExistentes_(abaMapros, abaAtividades) {
   if (abaMapros.getLastRow() < 2) return;
   const mapros = lerRegistros_(abaMapros, CABECALHOS_MAPROS);
-  const porMapro = agruparAtividadesPorMapro_(
-    lerRegistros_(abaAtividades, CABECALHOS_MAPRO_ATIVIDADES)
-  );
+  const atividades = lerRegistros_(abaAtividades, CABECALHOS_MAPRO_ATIVIDADES);
+  const porMapro = agruparAtividadesPorMapro_(atividades);
+  let alterouAgregados = false;
+  Object.keys(porMapro).forEach(function (idMapro) {
+    const registros = porMapro[idMapro];
+    const anteriores = registros.map(function (atividade) {
+      return [
+        dataIsoMapro_(atividade.DATA_INICIO),
+        dataIsoMapro_(atividade.DATA_FINAL),
+        String(atividade.STATUS_ATIVIDADE || '').toUpperCase()
+      ].join('|');
+    });
+    agregarTopicosMapro_(registros);
+    registros.forEach(function (atividade, indice) {
+      const atual = [
+        dataIsoMapro_(atividade.DATA_INICIO),
+        dataIsoMapro_(atividade.DATA_FINAL),
+        String(atividade.STATUS_ATIVIDADE || '').toUpperCase()
+      ].join('|');
+      if (atual !== anteriores[indice]) alterouAgregados = true;
+    });
+  });
+  if (alterouAgregados && atividades.length) {
+    const colunaDataInicio = CABECALHOS_MAPRO_ATIVIDADES.indexOf('DATA_INICIO') + 1;
+    abaAtividades.getRange(2, colunaDataInicio, atividades.length, 3).setValues(
+      atividades.map(function (atividade) {
+        return [
+          atividade.DATA_INICIO || '',
+          atividade.DATA_FINAL || '',
+          atividade.STATUS_ATIVIDADE || ''
+        ];
+      })
+    );
+  }
   let alterouStatus = false;
   let alterouConclusao = false;
   const status = [];

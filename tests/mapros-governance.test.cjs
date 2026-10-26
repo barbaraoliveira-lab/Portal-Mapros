@@ -50,6 +50,33 @@ const empateTerminal = vm.runInContext(
 );
 assert.equal(empateTerminal, 'EM_ANDAMENTO');
 
+const hierarquiaAgregada = JSON.parse(vm.runInContext(`JSON.stringify((function () {
+  const registros = ${JSON.stringify([
+    {ID_ATIVIDADE:'T',ID_ATIVIDADE_PAI:'',TIPO:'TOPICO',STATUS_ATIVIDADE:'PLANEJADA',ATIVO:'SIM'},
+    {ID_ATIVIDADE:'A',ID_ATIVIDADE_PAI:'T',TIPO:'ATIVIDADE',STATUS_ATIVIDADE:'PLANEJADA',ATIVO:'SIM'},
+    {ID_ATIVIDADE:'S1',ID_ATIVIDADE_PAI:'A',TIPO:'SUBATIVIDADE',STATUS_ATIVIDADE:'CONCLUIDA',ATIVO:'SIM',DATA_INICIO:'2026-10-01',DATA_FINAL:'2026-10-04'},
+    {ID_ATIVIDADE:'S2',ID_ATIVIDADE_PAI:'A',TIPO:'SUBATIVIDADE',STATUS_ATIVIDADE:'EM_ANDAMENTO',ATIVO:'SIM',DATA_INICIO:'2026-10-03',DATA_FINAL:'2026-10-12'}
+  ])};
+  agregarTopicosMapro_(registros);
+  return registros;
+})())`, contexto));
+assert.equal(hierarquiaAgregada[1].DATA_INICIO, '2026-10-01');
+assert.equal(hierarquiaAgregada[1].DATA_FINAL, '2026-10-12');
+assert.equal(hierarquiaAgregada[1].STATUS_ATIVIDADE, 'EM_ANDAMENTO');
+hierarquiaAgregada[3].STATUS_ATIVIDADE = 'CONCLUIDA';
+const hierarquiaConcluida = JSON.parse(vm.runInContext(
+  `JSON.stringify(agregarTopicosMapro_(${JSON.stringify(hierarquiaAgregada)}))`, contexto
+));
+assert.equal(hierarquiaConcluida[1].STATUS_ATIVIDADE, 'CONCLUIDA');
+assert.equal(hierarquiaConcluida[0].STATUS_ATIVIDADE, 'CONCLUIDA');
+
+assert.doesNotThrow(function () {
+  vm.runInContext(`validarAtividadeMapro_(${JSON.stringify({
+    idMapro: '1', idAtividadePai: 'T', tipo: 'ATIVIDADE', nomeAtividade: 'Atividade-pai',
+    status: 'NAO_APLICAVEL'
+  })}, {permitirCamposOperacionaisVazios:true})`, contexto);
+});
+
 assert.match(codigo, /'AREAS_RELACIONADAS'/);
 assert.match(codigo, /'GERENTE', 'DIRETOR'/);
 assert.match(mapros, /CABECALHOS_BASE_DEPARTAMENTOS = \['DEPARTAMENTO', 'AREAS_RELACIONADAS'\]/);
@@ -72,6 +99,8 @@ assert.equal(vm.runInContext(
   contexto
 ), false);
 assert.match(codigo, /sincronizarParticipantesMapros_\(abaMapros, obterAbaMaproParticipantes_\(\), abaUsuarios\)/);
+assert.match(mapros, /alterouAgregados && atividades\.length/);
+assert.match(codigo, /versaoEstrutura: '2026-10-26-01'/);
 assert.match(mapros, /Esta Mapro foi cancelada e está disponível somente para o SGI/);
 assert.match(mapros, /function cancelarMaprosInativas_/);
 assert.match(mapros, /function prepararInativacaoResponsavelMapro_/);

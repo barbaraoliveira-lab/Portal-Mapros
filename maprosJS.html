@@ -1275,22 +1275,20 @@
         atividade.dataFinal = finais.length ? finais[finais.length - 1] : '';
         atividade.semanaInicio = formatarSemanaMapros(atividade.dataInicio);
         atividade.semanaFinal = formatarSemanaMapros(atividade.dataFinal);
-        if (atividade.tipo === 'TOPICO') {
-          const descendentes = [];
-          const coletar = function (idPai) {
-            (filhosPorPai[idPai] || []).forEach(function (filha) {
-              descendentes.push(filha);
-              coletar(filha.idAtividade);
-            });
-          };
-          coletar(atividade.idAtividade);
-          const aplicaveis = descendentes.filter(function (item) {
-            return item.tipo !== 'TOPICO' && item.status !== 'NAO_APLICAVEL';
+        const descendentes = [];
+        const coletar = function (idPai) {
+          (filhosPorPai[idPai] || []).forEach(function (filha) {
+            descendentes.push(filha);
+            coletar(filha.idAtividade);
           });
-          atividade.status = !aplicaveis.length ? 'NAO_APLICAVEL' :
-            aplicaveis.every(function (item) { return item.status === 'CONCLUIDA'; })
-              ? 'CONCLUIDA' : 'EM_ANDAMENTO';
-        }
+        };
+        coletar(atividade.idAtividade);
+        const aplicaveis = descendentes.filter(function (item) {
+          return item.tipo !== 'TOPICO' && item.status !== 'NAO_APLICAVEL';
+        });
+        atividade.status = !aplicaveis.length ? 'NAO_APLICAVEL' :
+          aplicaveis.every(function (item) { return item.status === 'CONCLUIDA'; })
+            ? 'CONCLUIDA' : 'EM_ANDAMENTO';
       }
       atividade.saude = calcularSaudeAtividadeClienteMapro(atividade);
     };
@@ -1732,7 +1730,7 @@
       { valor: 'NAO_APLICAVEL', texto: 'Não aplicável' }
     ];
     const situacao = criarSelectAtividadeMapro('status', situacoes, atividade.status || 'PLANEJADA');
-    situacao.disabled = atividade.tipo === 'TOPICO' || !podeEditarLinha;
+    situacao.disabled = atividade.tipo === 'TOPICO' || temFilhos || !podeEditarLinha;
     linha.appendChild(criarCelulaControleMapro('Situação', situacao));
     const predecessora = criarSelectAtividadeMapro(
       'idAtividadePredecessora', criarOpcoesPredecessorasMapro(atividade),
@@ -2305,14 +2303,15 @@
         focarCampoEdicaoAtividadeMapro(atividade, 'nomeAtividade');
         return false;
       }
+      const possuiFilhos = estadoMapros.detalhe.atividades.concat(estadoMapros.rascunhosAtividades)
+        .some(function (item) { return item.idAtividadePai === atividade.idAtividade; });
+      if (atividade.tipo === 'TOPICO' || possuiFilhos) continue;
       if (atividade.status === 'NAO_APLICAVEL' &&
           String(atividade.justificativa || '').trim().length < 5) {
         mostrarAvisoMapros('Obrigatório o preenchimento da justificativa para atividade não aplicável.', true);
         focarCampoEdicaoAtividadeMapro(atividade, 'justificativa');
         return false;
       }
-      if (atividade.tipo === 'TOPICO' || estadoMapros.detalhe.atividades.concat(estadoMapros.rascunhosAtividades)
-          .some(item => item.idAtividadePai === atividade.idAtividade)) continue;
       if (!atividade.idResponsavel) {
         mostrarAvisoMapros('Selecione o responsável da atividade antes de salvar.', true);
         focarCampoEdicaoAtividadeMapro(atividade, 'idResponsavel');
@@ -2491,7 +2490,7 @@
       const statusVisual = linha.querySelector('.bolinha-status');
       if (inicio) inicio.value = topico.dataInicio || '';
       if (final) final.value = topico.dataFinal || '';
-      if (situacao && topico.tipo === 'TOPICO') situacao.value = topico.status || '';
+      if (situacao) situacao.value = topico.status || '';
       if (semanaInicio) semanaInicio.textContent = topico.semanaInicio || '—';
       if (semanaFinal) semanaFinal.textContent = topico.semanaFinal || '—';
       if (statusVisual) {

@@ -2,7 +2,7 @@ const CONFIG = {
   nomeSistema: 'MAPRO',
   emailAdministrador: 'sgi@integrajca.com.br',
   corPrincipal: '#030441',
-  versaoEstrutura: '2026-10-14-01',
+  versaoEstrutura: '2026-10-26-01',
   logoCarregamentoId: '1xu3olDb4OIgL2QzIKreygYr-J_oC3cv3',
   logoId: '1KZzCBGZF8UV4s-Lk9XG9GzkHUuOh5UfN',
   logoEmpresaId: '1lh2A0JeKyfEmf3rDfJvLy32FLcInxza5',

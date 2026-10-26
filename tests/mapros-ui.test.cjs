@@ -86,6 +86,9 @@ assert.match(cliente, /omitirResponsabilidade \? '—' : atividade\.departamento
 assert.doesNotMatch(cliente, /documento\.appendChild\(rodape\.cloneNode\(true\)\)/);
 assert.match(cliente, /MaproUI\.showLoading\('Iniciando acompanhamento\.\.\.'\)/);
 assert.match(cliente, /botao\.textContent = 'INICIANDO\.\.\.'/);
+assert.match(cliente,
+  /situacao\.disabled = atividade\.tipo === 'TOPICO' \|\| temFilhos \|\| !podeEditarLinha/);
+assert.match(cliente, /if \(situacao\) situacao\.value = topico\.status \|\| ''/);
 
 assert.match(css, /\.opcao-participante-mapro\[hidden\]\s*\{\s*display:\s*none;/);
 assert.match(cliente, /normalizarPesquisaParticipanteMapro/);
