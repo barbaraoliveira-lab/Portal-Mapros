@@ -148,6 +148,21 @@ vm.runInContext(`
   assert.equal(vm.runInContext(`selecionarAtividadesDashboardMapro_([
     {ID_RESPONSAVEL:'1'}, {ID_RESPONSAVEL:'2'}
   ], '1', false).length`,server),1,'demais perfis veem somente as próprias atividades');
+  assert.equal(vm.runInContext(`classificarSituacaoDashboardMapro_({
+    STATUS_MAPRO:'EM_ANDAMENTO', ACOMPANHAMENTO_INICIADO_EM:''
+  }, [{ID_ATIVIDADE:'1',TIPO:'ATIVIDADE',STATUS_ATIVIDADE:'PLANEJADA'}])`,server),
+  'AGUARDANDO INÍCIO', 'Mapro sem início do acompanhamento aparece como não iniciada');
+  assert.equal(vm.runInContext(`classificarSituacaoDashboardMapro_({
+    STATUS_MAPRO:'AGUARDANDO_INICIO', ACOMPANHAMENTO_INICIADO_EM:'2026-10-26T12:00:00.000Z'
+  }, [{ID_ATIVIDADE:'1',TIPO:'ATIVIDADE',STATUS_ATIVIDADE:'PLANEJADA'}])`,server),
+  'EM ANDAMENTO', 'Mapro com acompanhamento iniciado aparece em andamento');
+  assert.equal(vm.runInContext(`classificarSituacaoDashboardMapro_({
+    STATUS_MAPRO:'EM_ANDAMENTO', ACOMPANHAMENTO_INICIADO_EM:'2026-10-26T12:00:00.000Z'
+  }, [{ID_ATIVIDADE:'1',TIPO:'ATIVIDADE',STATUS_ATIVIDADE:'CONCLUIDA'}])`,server),
+  'CONCLUÍDA', 'situação final prevalece sobre o marco de acompanhamento');
+  assert.equal(vm.runInContext(`classificarSituacaoDashboardMapro_({
+    STATUS_MAPRO:'CANCELADA', ACOMPANHAMENTO_INICIADO_EM:''
+  }, [])`,server), 'CANCELADA', 'Mapro cancelada continua cancelada');
   assert.equal(vm.runInContext(`calcularSituacaoProjetoMapro_('EM_ANDAMENTO', [
     {ID_ATIVIDADE:'1',TIPO:'ATIVIDADE',STATUS_ATIVIDADE:'CONCLUIDA'},
     {ID_ATIVIDADE:'2',TIPO:'ATIVIDADE',STATUS_ATIVIDADE:'CONCLUIDA'},

@@ -492,6 +492,29 @@ function montarConfiguracaoPaginaMapros_(usuario, admin, mapros) {
   };
 }
 
+/**
+ * Classifica o status exibido no dashboard sem depender de rótulos legados.
+ * Para projetos ativos, o marco de início é exclusivamente o acionamento de
+ * "Iniciar acompanhamento". Situações finais continuam prevalecendo.
+ */
+function classificarSituacaoDashboardMapro_(mapro, atividades) {
+  const registro = mapro || {};
+  const atual = normalizarSituacaoMapro_(registro.STATUS_MAPRO);
+  if (atual === 'CANCELADA' || atual === 'ARQUIVADA') return atual;
+
+  const calculada = normalizarSituacaoMapro_(
+    calcularSituacaoProjetoMapro_(registro.STATUS_MAPRO, atividades || [])
+  );
+  if (['CONCLUÍDA', 'NÃO APLICÁVEL'].indexOf(calculada) !== -1) {
+    return calculada;
+  }
+
+  const acompanhamentoIniciado = String(
+    registro.ACOMPANHAMENTO_INICIADO_EM || ''
+  ).trim() !== '';
+  return acompanhamentoIniciado ? 'EM ANDAMENTO' : 'AGUARDANDO INÍCIO';
+}
+
 /** Retorna somente dados de projetos que o usuário atual está autorizado a consultar. */
 function carregarDashboardMapro() {
   try {
@@ -522,12 +545,13 @@ function carregarDashboardMapro() {
           saude: calcularSaudeAtividadeMapro_(atividade)
         };
       };
-      const statusPersistido = String(mapro.STATUS_MAPRO || '').toUpperCase();
-      const status = ['AGUARDANDO_INICIO', 'AGUARDANDO_PREENCHIMENTO']
-        .indexOf(statusPersistido) !== -1
-        ? statusPersistido
-        : calcularSituacaoProjetoMapro_(mapro.STATUS_MAPRO, atividadesMapro);
-      const statusNormalizado = normalizarSituacaoMapro_(status);
+      const acompanhamentoIniciado = String(
+        mapro.ACOMPANHAMENTO_INICIADO_EM || ''
+      ).trim() !== '';
+      const statusNormalizado = classificarSituacaoDashboardMapro_(
+        mapro,
+        atividadesMapro
+      );
       const canceladaPorInatividade = statusNormalizado === 'CANCELADA' &&
         normalizarTexto_(mapro.MOTIVO_CANCELAMENTO).indexOf('inatividade') !== -1;
       return {
@@ -541,7 +565,7 @@ function carregarDashboardMapro() {
         lider: String(mapro['NOME_LÍDER'] || ''),
         status: statusNormalizado,
         canceladaPorInatividade: canceladaPorInatividade,
-        acompanhamentoIniciado: Boolean(mapro.ACOMPANHAMENTO_INICIADO_EM),
+        acompanhamentoIniciado: acompanhamentoIniciado,
         acompanhamentoIniciadoEm: String(mapro.ACOMPANHAMENTO_INICIADO_EM || ''),
         motivoCancelamento: String(mapro.MOTIVO_CANCELAMENTO || ''),
         dataInicio: resumo.dataInicio || dataIsoMapro_(mapro.DATA_INICIO),
@@ -551,7 +575,7 @@ function carregarDashboardMapro() {
         percentual: resumo.percentual,
         totalAtividades: resumo.totalAtividades,
         replanejada: Boolean(maprosReplanejadas[String(Number(mapro.ID_MAPRO))]),
-        temNovasAtividades: Boolean(mapro.ACOMPANHAMENTO_INICIADO_EM) && operacionais.some(function (atividade) {
+        temNovasAtividades: acompanhamentoIniciado && operacionais.some(function (atividade) {
           return new Date(atividade.CRIADO_EM).getTime() > new Date(mapro.ACOMPANHAMENTO_INICIADO_EM).getTime();
         }),
         minhasAtividades: minhas.map(mapearMinha)
